@@ -1,0 +1,28 @@
+# STM32CubeIDE generated files
+Debug/
+.settings/
+.cproject
+.project
+.mxproject
+
+# Build artifacts
+*.o
+*.su
+*.d
+*.cyclo
+*.list
+*.map
+*.elf
+*.bin
+*.hex
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
