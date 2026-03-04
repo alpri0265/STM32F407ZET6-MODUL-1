@@ -27,11 +27,18 @@ static void render_list_screen(void)
     lcd_clear();
     unsigned int n = menu_get_count();
     unsigned int sel = menu_get_selected();
+    /* Прокрутка: якщо пунктів > 4, показуємо вікно з 4 рядків так, щоб курсор був видно */
+    unsigned int first = 0u;
+    if (n > 4u) {
+        first = (sel >= 3u) ? (sel - 3u) : 0u;
+        if (first + 4u > n) first = n - 4u;
+    }
     char buf[LINE_LEN + 4];
     for (unsigned int i = 0; i < 4u; i++) {
-        if (i < n) {
-            const char *prefix = (i == sel) ? MENU_LINE_SEL : MENU_LINE_PREFIX;
-            const char *p = menu_get_item_text(i);
+        unsigned int idx = first + i;
+        if (idx < n) {
+            const char *prefix = (idx == sel) ? MENU_LINE_SEL : MENU_LINE_PREFIX;
+            const char *p = menu_get_item_text(idx);
             (void)snprintf(buf, sizeof(buf), "%s%-16s", prefix, p);
         } else
             (void)snprintf(buf, sizeof(buf), "                    ");
@@ -127,17 +134,21 @@ static void render_info_encoders(void)
 
 static void render_info_adc_fault(void)
 {
-    float t = temperature_get_c();
-    float angle = tool_angle_get_deg();
+    float t_c = temperature_get_c();
     uint16_t feed_raw = adc_if_read(ADC_CH_FEED_OVERRIDE);
+    uint16_t enc_raw = adc_if_read(ADC_CH_TOOL_ANGLE);
+    unsigned int enc_deg = (unsigned int)enc_raw * 360u / 4095u;
     uint16_t fault = fault_get();
-    char buf[LINE_LEN + 2];
-    lcd_print_line(0, "ADC / Fault        ");
-    (void)snprintf(buf, sizeof(buf), "T:%.1fC F:%u     ", (double)t, (unsigned)feed_raw);
+    char buf[LINE_LEN + 4];
+    lcd_print_line(0, "ADC / Fault            ");
+    (void)snprintf(buf, sizeof(buf), "T:%.1f C  Feed:%u     ", (double)t_c, (unsigned)feed_raw);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "Angle: %.1f deg  ", (double)angle);
+    (void)snprintf(buf, sizeof(buf), "Enc: %u deg           ", enc_deg);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "Fault: %u        ", (unsigned)fault);
+    (void)snprintf(buf, sizeof(buf), "Fault: %u  [Back]    ", (unsigned)fault);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
 }
 
@@ -226,6 +237,7 @@ void screens_process(void)
                     need_render = true;
                 }
             }
+            /* Завжди скидаємо дію, щоб encoder_menu_process() знову опитував кнопки */
             encoder_menu_clear_action();
         }
 
@@ -233,6 +245,9 @@ void screens_process(void)
             need_render = true;
             menu_need_redraw = true;
         }
+        /* Екран ADC/Fault показує живі значення — завжди перемальовувати, щоб tick і ADC оновлювалися */
+        if (cur == SCREEN_ADC_FAULT)
+            need_render = true;
         if (need_render)
             render_current_screen();
     } else {

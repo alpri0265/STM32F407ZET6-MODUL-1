@@ -13,9 +13,11 @@
 #ifndef MENU_BTN_ENTER_ACTIVE_HIGH
 #define MENU_BTN_ENTER_ACTIVE_HIGH  1
 #endif
-#define DEBOUNCE_MS  35u  /* мінімальний час утримання для спрацювання (фільтр дребезгу) */
+#define DEBOUNCE_MS      35u   /* мінімальний час утримання для спрацювання */
+#define ACTION_TIMEOUT_MS 1500u /* якщо дію не забрали — скинути, щоб меню не зависало */
 
 static encoder_menu_action_t action;
+static uint32_t action_set_tick;
 
 /* Читання сирого рівня: 1 = натиснуто (залежить від MENU_BTN_ACTIVE_HIGH). */
 static bool raw_up(void)
@@ -51,6 +53,7 @@ static void poll_btn(btn_t *b, bool pressed, encoder_menu_action_t a)
         if (b->primed && !b->emitted && action == ENCODER_MENU_ACTION_NONE && b->pressed_since_tick != 0) {
             if ((now - b->pressed_since_tick) >= DEBOUNCE_MS) {
                 action = a;
+                action_set_tick = now;
                 b->emitted = true;
             }
         }
@@ -76,6 +79,7 @@ static void buttons_gpio_init(void)
 void encoder_menu_init(void)
 {
     action = ENCODER_MENU_ACTION_NONE;
+    action_set_tick = 0;
     up_btn.last = raw_up();
     up_btn.primed = false;
     up_btn.pressed_since_tick = 0;
@@ -96,8 +100,17 @@ void encoder_menu_init(void)
 
 void encoder_menu_process(void)
 {
-    if (action != ENCODER_MENU_ACTION_NONE)
-        return;
+    uint32_t now = HAL_GetTick();
+
+    if (action != ENCODER_MENU_ACTION_NONE) {
+        if ((now - action_set_tick) >= ACTION_TIMEOUT_MS) {
+            action = ENCODER_MENU_ACTION_NONE;
+            up_btn.emitted = false;
+            down_btn.emitted = false;
+            enter_btn.emitted = false;
+        } else
+            return;
+    }
 
     poll_btn(&up_btn,   raw_up(),   ENCODER_MENU_ACTION_CCW);
     poll_btn(&down_btn,  raw_down(),  ENCODER_MENU_ACTION_CW);
