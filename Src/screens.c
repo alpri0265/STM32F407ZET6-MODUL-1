@@ -4,22 +4,37 @@
 #include "menu.h"
 #include "encoder_menu.h"
 #include "bringup_config.h"
+#include "main.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
 #define MENU_LINE_PREFIX "  "
 #define MENU_LINE_SEL    "> "
+#define SELECTED_MSG_MS  1500u
 
 static bool menu_need_redraw;
+static uint32_t selected_show_until_tick;
 
 static void render_menu(void)
 {
     lcd_clear();
-    unsigned int n = menu_get_count();
+    uint32_t now = HAL_GetTick();
     unsigned int sel = menu_get_selected();
-    unsigned int i;
     char buf[22];
+
+    if (selected_show_until_tick != 0 && now < selected_show_until_tick) {
+        (void)snprintf(buf, sizeof(buf), "Вибрано: %s", menu_get_item_text(sel));
+        buf[sizeof(buf) - 1] = '\0';
+        lcd_print_line(0, buf);
+        for (uint8_t i = 1; i < 4; i++)
+            lcd_print_line(i, "                    ");
+        return;
+    }
+    selected_show_until_tick = 0;
+
+    unsigned int n = menu_get_count();
+    unsigned int i;
     const char *p;
     const char *prefix;
 
@@ -58,6 +73,7 @@ void screens_process(void)
             need_render = true;
         } else if (act == ENCODER_MENU_ACTION_ENTER) {
             menu_enter();
+            selected_show_until_tick = HAL_GetTick() + SELECTED_MSG_MS;
             encoder_menu_clear_action();
             need_render = true;
         }

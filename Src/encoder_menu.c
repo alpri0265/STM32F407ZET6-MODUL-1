@@ -3,106 +3,84 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Проста реалізація меню на трьох кнопках замість енкодера.
- *
- * PB12 (MPG_A_Pin)  → MENU_UP    → ENCODER_MENU_ACTION_CCW  (рух курсора вгору)
- * PB13 (MPG_B_Pin)  → MENU_DOWN  → ENCODER_MENU_ACTION_CW   (рух курсора вниз)
- * PB14 (MPG_BTN_Pin)→ MENU_ENTER → ENCODER_MENU_ACTION_ENTER
- *
- * Кнопки підключені до землі (натиснуто = LOW), всередині ввімкнена підтяжка вгору.
+/* Меню на трьох кнопках (PB12, PB13, PB14).
+ * PB12 → вгору (CCW), PB13 → вниз (CW), PB14 → Enter.
+ * MENU_BTN_ACTIVE_HIGH: 1 = вгору/вниз натиснуто при HIGH. MENU_BTN_ENTER_ACTIVE_HIGH: окремо для PB14 (вибір).
  */
-
-#define DEBOUNCE_MS    30u
+#ifndef MENU_BTN_ACTIVE_HIGH
+#define MENU_BTN_ACTIVE_HIGH  0
+#endif
+#ifndef MENU_BTN_ENTER_ACTIVE_HIGH
+#define MENU_BTN_ENTER_ACTIVE_HIGH  1
+#endif
 
 static encoder_menu_action_t action;
 
+/* Читання сирого рівня: 1 = натиснуто (залежить від MENU_BTN_ACTIVE_HIGH). */
+static bool raw_up(void)
+{
+    return (HAL_GPIO_ReadPin(MPG_A_GPIO_Port, MPG_A_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ACTIVE_HIGH != 0) : (MENU_BTN_ACTIVE_HIGH == 0);
+}
+static bool raw_down(void)
+{
+    return (HAL_GPIO_ReadPin(MPG_B_GPIO_Port, MPG_B_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ACTIVE_HIGH != 0) : (MENU_BTN_ACTIVE_HIGH == 0);
+}
+static bool raw_enter(void)
+{
+    return (HAL_GPIO_ReadPin(MPG_BTN_GPIO_Port, MPG_BTN_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ENTER_ACTIVE_HIGH != 0) : (MENU_BTN_ENTER_ACTIVE_HIGH == 0);
+}
+
+/* Подія на перехід "відпущено" -> "натиснуто". primed = побачили "відпущено" хоча б раз (щоб не спрацювало при утриманні під час включення). */
 typedef struct {
-    bool prev_raw;
-    bool stable;
-    bool prev_stable;
-    uint32_t stable_ticks;
-} btn_state_t;
+    bool last;
+    bool primed;
+} btn_t;
 
-static btn_state_t btn_up;
-static btn_state_t btn_down;
-static btn_state_t btn_enter;
+static btn_t up_btn, down_btn, enter_btn;
 
-static bool read_btn_up(void)
+static void poll_btn(btn_t *b, bool pressed, encoder_menu_action_t a)
 {
-    return HAL_GPIO_ReadPin(MPG_A_GPIO_Port, MPG_A_Pin) == GPIO_PIN_RESET;
+    if (pressed && !b->last && b->primed && action == ENCODER_MENU_ACTION_NONE)
+        action = a;
+    b->last = pressed;
+    if (!pressed)
+        b->primed = true;
 }
 
-static bool read_btn_down(void)
+static void buttons_gpio_init(void)
 {
-    return HAL_GPIO_ReadPin(MPG_B_GPIO_Port, MPG_B_Pin) == GPIO_PIN_RESET;
-}
-
-static bool read_btn_enter(void)
-{
-    return HAL_GPIO_ReadPin(MPG_BTN_GPIO_Port, MPG_BTN_Pin) == GPIO_PIN_RESET;
-}
-
-static void btn_poll(btn_state_t *s, bool raw, uint32_t dt_ms)
-{
-    if (raw == s->prev_raw) {
-        if (s->stable_ticks < DEBOUNCE_MS)
-            s->stable_ticks += dt_ms;
-        if (s->stable_ticks >= DEBOUNCE_MS)
-            s->stable = raw;
-    } else {
-        s->prev_raw = raw;
-        s->stable_ticks = 0;
-    }
+    HAL_NVIC_DisableIRQ(EXTI15_10_IRQn);
+    GPIO_InitTypeDef g = {0};
+    g.Mode = GPIO_MODE_INPUT;
+    g.Pull = GPIO_PULLUP;
+    g.Speed = GPIO_SPEED_FREQ_LOW;
+    g.Pin = MPG_A_Pin | MPG_B_Pin | MPG_BTN_Pin;
+    HAL_GPIO_Init(MPG_A_GPIO_Port, &g);
 }
 
 void encoder_menu_init(void)
 {
     action = ENCODER_MENU_ACTION_NONE;
-
-    btn_up.prev_raw = read_btn_up();
-    btn_up.stable = false;
-    btn_up.prev_stable = false;
-    btn_up.stable_ticks = 0;
-
-    btn_down.prev_raw = read_btn_down();
-    btn_down.stable = false;
-    btn_down.prev_stable = false;
-    btn_down.stable_ticks = 0;
-
-    btn_enter.prev_raw = read_btn_enter();
-    btn_enter.stable = false;
-    btn_enter.prev_stable = false;
-    btn_enter.stable_ticks = 0;
+    up_btn.last = raw_up();
+    up_btn.primed = false;
+    down_btn.last = raw_down();
+    down_btn.primed = false;
+    enter_btn.last = raw_enter();
+    enter_btn.primed = false;
+    buttons_gpio_init();
+    up_btn.last = raw_up();
+    down_btn.last = raw_down();
+    enter_btn.last = raw_enter();
 }
 
 void encoder_menu_process(void)
 {
-    static uint32_t last_tick;
-    uint32_t now = HAL_GetTick();
-    uint32_t dt = (now >= last_tick) ? (now - last_tick) : 0;
-    if (dt > 100u) dt = 100u; /* обмеження, щоб не переповнювати лічильники при паузах */
-    last_tick = now;
-
-    /* Якщо попередня дія ще не оброблена екранами — не приймаємо нові події */
     if (action != ENCODER_MENU_ACTION_NONE)
         return;
 
-    btn_poll(&btn_up,    read_btn_up(),    dt);
-    btn_poll(&btn_down,  read_btn_down(),  dt);
-    btn_poll(&btn_enter, read_btn_enter(), dt);
-
-    /* Фронти натискання (stable: 0→1) */
-    if (btn_up.stable && !btn_up.prev_stable) {
-        action = ENCODER_MENU_ACTION_CCW;   /* курсор вгору */
-    } else if (btn_down.stable && !btn_down.prev_stable) {
-        action = ENCODER_MENU_ACTION_CW;    /* курсор вниз */
-    } else if (btn_enter.stable && !btn_enter.prev_stable) {
-        action = ENCODER_MENU_ACTION_ENTER;
-    }
-
-    btn_up.prev_stable    = btn_up.stable;
-    btn_down.prev_stable  = btn_down.stable;
-    btn_enter.prev_stable = btn_enter.stable;
+    poll_btn(&up_btn,   raw_up(),   ENCODER_MENU_ACTION_CCW);
+    poll_btn(&down_btn,  raw_down(),  ENCODER_MENU_ACTION_CW);
+    poll_btn(&enter_btn, raw_enter(), ENCODER_MENU_ACTION_ENTER);
 }
 
 encoder_menu_action_t encoder_menu_get_action(void)
