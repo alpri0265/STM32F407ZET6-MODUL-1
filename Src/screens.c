@@ -24,7 +24,7 @@ static void render_menu(void)
     char buf[22];
 
     if (selected_show_until_tick != 0 && now < selected_show_until_tick) {
-        (void)snprintf(buf, sizeof(buf), "Вибрано: %s", menu_get_item_text(sel));
+        (void)snprintf(buf, sizeof(buf), "OK: %s", menu_get_item_text(sel));
         buf[sizeof(buf) - 1] = '\0';
         lcd_print_line(0, buf);
         for (uint8_t i = 1; i < 4; i++)
@@ -63,19 +63,29 @@ void screens_process(void)
     if (system_state_is(SYS_STATE_READY)) {
         encoder_menu_action_t act = encoder_menu_get_action();
         bool need_render = false;
-        if (act == ENCODER_MENU_ACTION_CW) {
-            menu_select_next();
+        uint32_t now = HAL_GetTick();
+        bool in_selected_msg = (selected_show_until_tick != 0 && now < selected_show_until_tick);
+
+        if (in_selected_msg && act != ENCODER_MENU_ACTION_NONE) {
+            /* Будь-яка кнопка — повернення до списку меню */
+            selected_show_until_tick = 0;
             encoder_menu_clear_action();
             need_render = true;
-        } else if (act == ENCODER_MENU_ACTION_CCW) {
-            menu_select_prev();
-            encoder_menu_clear_action();
-            need_render = true;
-        } else if (act == ENCODER_MENU_ACTION_ENTER) {
-            menu_enter();
-            selected_show_until_tick = HAL_GetTick() + SELECTED_MSG_MS;
-            encoder_menu_clear_action();
-            need_render = true;
+        } else if (!in_selected_msg) {
+            if (act == ENCODER_MENU_ACTION_CW) {
+                menu_select_next();
+                encoder_menu_clear_action();
+                need_render = true;
+            } else if (act == ENCODER_MENU_ACTION_CCW) {
+                menu_select_prev();
+                encoder_menu_clear_action();
+                need_render = true;
+            } else if (act == ENCODER_MENU_ACTION_ENTER) {
+                menu_enter();
+                selected_show_until_tick = HAL_GetTick() + SELECTED_MSG_MS;
+                encoder_menu_clear_action();
+                need_render = true;
+            }
         }
         if (!menu_need_redraw) {
             need_render = true;

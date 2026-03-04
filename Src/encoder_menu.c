@@ -13,6 +13,7 @@
 #ifndef MENU_BTN_ENTER_ACTIVE_HIGH
 #define MENU_BTN_ENTER_ACTIVE_HIGH  1
 #endif
+#define DEBOUNCE_MS  35u  /* мінімальний час утримання для спрацювання (фільтр дребезгу) */
 
 static encoder_menu_action_t action;
 
@@ -30,21 +31,35 @@ static bool raw_enter(void)
     return (HAL_GPIO_ReadPin(MPG_BTN_GPIO_Port, MPG_BTN_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ENTER_ACTIVE_HIGH != 0) : (MENU_BTN_ENTER_ACTIVE_HIGH == 0);
 }
 
-/* Подія на перехід "відпущено" -> "натиснуто". primed = побачили "відпущено" хоча б раз (щоб не спрацювало при утриманні під час включення). */
+/* Дебаунс за часом: подія тільки після утримання натиснуто >= DEBOUNCE_MS. primed = спочатку побачили "відпущено". */
 typedef struct {
     bool last;
     bool primed;
+    uint32_t pressed_since_tick;  /* 0 = не натиснуто */
+    bool emitted;
 } btn_t;
 
 static btn_t up_btn, down_btn, enter_btn;
 
 static void poll_btn(btn_t *b, bool pressed, encoder_menu_action_t a)
 {
-    if (pressed && !b->last && b->primed && action == ENCODER_MENU_ACTION_NONE)
-        action = a;
-    b->last = pressed;
-    if (!pressed)
+    uint32_t now = HAL_GetTick();
+
+    if (pressed) {
+        if (!b->last)
+            b->pressed_since_tick = now;
+        if (b->primed && !b->emitted && action == ENCODER_MENU_ACTION_NONE && b->pressed_since_tick != 0) {
+            if ((now - b->pressed_since_tick) >= DEBOUNCE_MS) {
+                action = a;
+                b->emitted = true;
+            }
+        }
+    } else {
+        b->pressed_since_tick = 0;
+        b->emitted = false;
         b->primed = true;
+    }
+    b->last = pressed;
 }
 
 static void buttons_gpio_init(void)
@@ -63,10 +78,16 @@ void encoder_menu_init(void)
     action = ENCODER_MENU_ACTION_NONE;
     up_btn.last = raw_up();
     up_btn.primed = false;
+    up_btn.pressed_since_tick = 0;
+    up_btn.emitted = false;
     down_btn.last = raw_down();
     down_btn.primed = false;
+    down_btn.pressed_since_tick = 0;
+    down_btn.emitted = false;
     enter_btn.last = raw_enter();
     enter_btn.primed = false;
+    enter_btn.pressed_since_tick = 0;
+    enter_btn.emitted = false;
     buttons_gpio_init();
     up_btn.last = raw_up();
     down_btn.last = raw_down();

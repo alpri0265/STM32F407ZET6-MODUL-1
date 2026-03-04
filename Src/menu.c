@@ -40,6 +40,11 @@ void menu_enter(void)
     (void)selected;
 }
 
+void menu_back(void)
+{
+    /* Поки меню однерівневе — нічого. Потім: вихід з підменю. */
+}
+
 unsigned int menu_get_count(void)
 {
     return count;

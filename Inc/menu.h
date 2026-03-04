@@ -8,6 +8,7 @@ void menu_init(void);
 void menu_select_next(void);
 void menu_select_prev(void);
 void menu_enter(void);
+void menu_back(void);  /* повернення в попередній рівень (поки один рівень — нічого не робить) */
 
 unsigned int menu_get_count(void);
 unsigned int menu_get_selected(void);
