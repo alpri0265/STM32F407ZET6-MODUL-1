@@ -2,11 +2,11 @@
 #include <string.h>
 
 
-static const char *main_items[]     = { "Jog", "Settings", "Diagnostics", "Info", "" };
+static const char *main_items[]     = { "Jog", "Settings", "Diagnostics", "Tool angle", "Info", "" };
 static const char *settings_items[] = { "Axis X", "Axis Z", "Spindle", "Save & exit", "< Back", "" };
 static const char *diag_items[]     = { "I2C / LCD", "Encoders", "Limits", "ADC / Fault", "< Back", "" };
 
-static menu_screen_id_t main_children[]      = { SCREEN_JOG, SCREEN_SETTINGS, SCREEN_DIAG, SCREEN_INFO };
+static menu_screen_id_t main_children[]      = { SCREEN_JOG, SCREEN_SETTINGS, SCREEN_DIAG, SCREEN_TOOL_ANGLE, SCREEN_INFO };
 static menu_screen_id_t settings_children[]  = { SCREEN_AXIS_X, SCREEN_AXIS_Z, SCREEN_SPINDLE, SCREEN_ACTION_SAVE_EXIT, SCREEN_ACTION_BACK };
 static menu_screen_id_t diag_children[]       = { SCREEN_I2C_LCD, SCREEN_ENCODERS, SCREEN_LIMITS, SCREEN_ADC_FAULT, SCREEN_ACTION_BACK };
 
@@ -25,7 +25,7 @@ static menu_screen_id_t list_child(menu_screen_id_t screen, unsigned int index)
 {
     switch (screen) {
         case SCREEN_MAIN:
-            if (index < 4u) return main_children[index];
+            if (index < 5u) return main_children[index];
             break;
         case SCREEN_SETTINGS:
             if (index < 5u) return settings_children[index];

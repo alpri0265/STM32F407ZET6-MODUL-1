@@ -21,6 +21,21 @@ static void lcd_send(uint8_t data, uint8_t rs)
     HAL_I2C_Master_Transmit(&hi2c2, LCD_ADDR, buf, 4, 100);
 }
 
+/* Запис символу градуса в CGRAM слот 0 (код 0x00). */
+static void lcd_load_degree_char(void)
+{
+    lcd_send(0x40, 0);  /* CGRAM address 0 */
+    /* Градус: коло 5x8 */
+    lcd_send(0x0E, 1);
+    lcd_send(0x11, 1);
+    lcd_send(0x11, 1);
+    lcd_send(0x0E, 1);
+    lcd_send(0x00, 1);
+    lcd_send(0x00, 1);
+    lcd_send(0x00, 1);
+    lcd_send(0x00, 1);
+}
+
 void lcd_init(void)
 {
     HAL_Delay(50);
@@ -31,6 +46,7 @@ void lcd_init(void)
     lcd_send(0x06, 0);
     lcd_send(0x01, 0);
     HAL_Delay(5);
+    lcd_load_degree_char();
 }
 
 void lcd_clear(void)
@@ -53,5 +69,17 @@ void lcd_print_line(uint8_t row, const char *str)
     lcd_send(0x80 | row_addr[row], 0);
     while (*str)
         lcd_send((uint8_t)*str++, 1);
+}
+
+#define DEG_PLACEHOLDER 0xFF
+
+void lcd_print_line_deg(uint8_t row, const char *str)
+{
+    if (row > 3) return;
+    lcd_send(0x80 | row_addr[row], 0);
+    while (*str) {
+        uint8_t c = (uint8_t)*str++;
+        lcd_send((c == DEG_PLACEHOLDER) ? 0u : c, 1);
+    }
 }
 

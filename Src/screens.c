@@ -22,6 +22,11 @@
 
 static bool menu_need_redraw;
 
+/* Режим введення куту вручну на екрані Tool angle; value в десятих (0-3599), cursor 0-3 (сотні, десятки, одиниці, десяті) */
+static bool tool_angle_edit_mode;
+static unsigned int tool_angle_edit_value;
+static unsigned int tool_angle_edit_cursor;
+
 static void render_list_screen(void)
 {
     lcd_clear();
@@ -137,19 +142,69 @@ static void render_info_adc_fault(void)
     float t_c = temperature_get_c();
     uint16_t feed_raw = adc_if_read(ADC_CH_FEED_OVERRIDE);
     uint16_t enc_raw = adc_if_read(ADC_CH_TOOL_ANGLE);
-    unsigned int enc_deg = (unsigned int)enc_raw * 360u / 4095u;
+    float enc_deg_f = (float)enc_raw * 360.0f / 4095.0f;
+    unsigned int enc_d = (unsigned int)enc_deg_f;
+    unsigned int enc_t = (unsigned int)(enc_deg_f * 10.0f) % 10u;
     uint16_t fault = fault_get();
     char buf[LINE_LEN + 4];
+    unsigned int tc_d = (unsigned int)(t_c < 0.0f ? -t_c : t_c);
+    unsigned int tc_t = (unsigned int)((t_c < 0.0f ? -t_c : t_c) * 10.0f) % 10u;
     lcd_print_line(0, "ADC / Fault            ");
-    (void)snprintf(buf, sizeof(buf), "T:%.1f C  Feed:%u     ", (double)t_c, (unsigned)feed_raw);
+    (void)snprintf(buf, sizeof(buf), "T:%s%u.%u C Feed:%u   ", t_c < 0.0f ? "-" : "", tc_d, tc_t, (unsigned)feed_raw);
     buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "Enc: %u deg           ", enc_deg);
+    (void)snprintf(buf, sizeof(buf), "Enc: %u.%u %c          ", enc_d, enc_t, 0xFF);
     buf[LINE_LEN] = '\0';
-    lcd_print_line(2, buf);
+    lcd_print_line_deg(2, buf);
     (void)snprintf(buf, sizeof(buf), "Fault: %u  [Back]    ", (unsigned)fault);
     buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
+}
+
+static void render_info_tool_angle(void)
+{
+    char buf[LINE_LEN + 4];
+    if (tool_angle_edit_mode) {
+        unsigned int v = tool_angle_edit_value;
+        unsigned int h = (v / 10u) / 100u;   /* сотні 0-3 */
+        unsigned int t = (v / 10u) / 10u % 10u;
+        unsigned int o = (v / 10u) % 10u;
+        unsigned int d = v % 10u;             /* десяті */
+        (void)snprintf(buf, sizeof(buf), "Set angle (%c)        ", 0xFF);
+        buf[LINE_LEN] = '\0';
+        lcd_print_line_deg(0, buf);
+        (void)snprintf(buf, sizeof(buf), "Set: %u%u%u.%u %c      ", h, t, o, d, 0xFF);
+        buf[LINE_LEN] = '\0';
+        lcd_print_line_deg(1, buf);
+        /* Курсор під розрядом: "Set: " = 5 символів, потім цифри 5,6,7, крапка 8, цифра 9 */
+        { char cur[LINE_LEN + 1]; unsigned int i, pos = (tool_angle_edit_cursor < 3u) ? (5u + tool_angle_edit_cursor) : 9u;
+          for (i = 0u; i < LINE_LEN; i++) cur[i] = (i == pos) ? '^' : ' ';
+          cur[LINE_LEN] = '\0';
+          lcd_print_line(2, cur); }
+        lcd_print_line(3, "Enter=next Up/Down=+/- ");
+    } else {
+        float deg = tool_angle_get_deg();
+        unsigned int d = (unsigned int)deg;
+        unsigned int t = (unsigned int)(deg * 10.0f) % 10u;
+        lcd_print_line(0, "Kut instrumentu        ");
+        (void)snprintf(buf, sizeof(buf), "  %u.%u %c            ", d, t, 0xFF);
+        buf[LINE_LEN] = '\0';
+        lcd_print_line_deg(1, buf);
+        lcd_print_line(2, "Enter=Zero Down=Set    ");
+        lcd_print_line(3, "Up=Back               ");
+    }
+}
+
+/* Оновлює тільки рядок з кутом — без перемальовування всього екрану, щоб не мерехтіло */
+static void tool_angle_refresh_value_only(void)
+{
+    float deg = tool_angle_get_deg();
+    unsigned int d = (unsigned int)deg;
+    unsigned int t = (unsigned int)(deg * 10.0f) % 10u;
+    char buf[LINE_LEN + 4];
+    (void)snprintf(buf, sizeof(buf), "  %u.%u %c            ", d, t, 0xFF);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line_deg(1, buf);
 }
 
 static const char* state_str(void)
@@ -185,6 +240,7 @@ static void render_info_screen(menu_screen_id_t id)
         case SCREEN_ENCODERS:  render_info_encoders();  break;
         case SCREEN_LIMITS:    render_info_limits();    break;
         case SCREEN_ADC_FAULT: render_info_adc_fault();  break;
+        case SCREEN_TOOL_ANGLE: render_info_tool_angle(); break;
         case SCREEN_INFO:      render_info_info();      break;
         default:
             lcd_print_line(0, "Unknown screen     ");
@@ -221,8 +277,54 @@ void screens_process(void)
         menu_screen_id_t cur = menu_current_screen();
         menu_screen_type_t st = menu_screen_type(cur);
 
+        if (cur != SCREEN_TOOL_ANGLE)
+            tool_angle_edit_mode = false;
+
         if (act != ENCODER_MENU_ACTION_NONE) {
-            if (st == MENU_SCREEN_INFO && menu_can_back()) {
+            if (cur == SCREEN_TOOL_ANGLE && menu_can_back()) {
+                if (tool_angle_edit_mode) {
+                    if (act == ENCODER_MENU_ACTION_ENTER) {
+                        if (tool_angle_edit_cursor < 3u) {
+                            tool_angle_edit_cursor++;
+                            need_render = true;
+                        } else {
+                            tool_angle_set_displayed_deg((float)tool_angle_edit_value / 10.0f);
+                            tool_angle_edit_mode = false;
+                            need_render = true;
+                        }
+                    } else if (act == ENCODER_MENU_ACTION_CCW || act == ENCODER_MENU_ACTION_CW) {
+                        static const unsigned int place[] = { 1000u, 100u, 10u, 1u };
+                        unsigned int step = place[tool_angle_edit_cursor];
+                        if (act == ENCODER_MENU_ACTION_CCW) {
+                            tool_angle_edit_value += step;
+                            if (tool_angle_edit_value > 3599u) tool_angle_edit_value = 3599u;
+                        } else {
+                            if (tool_angle_edit_value >= step) tool_angle_edit_value -= step;
+                            else tool_angle_edit_value = 0u;
+                        }
+                        need_render = true;
+                    }
+                } else {
+                    if (act == ENCODER_MENU_ACTION_ENTER) {
+                        tool_angle_zero();
+                        need_render = true;
+                    } else if (act == ENCODER_MENU_ACTION_CW) {
+                        tool_angle_edit_mode = true;
+                        tool_angle_edit_cursor = 0u;
+                        {
+                            float d = tool_angle_get_deg();
+                            if (d < 0.0f) d = 0.0f;
+                            if (d >= 360.0f) d = 0.0f;
+                            tool_angle_edit_value = (unsigned int)(d * 10.0f + 0.5f);
+                            if (tool_angle_edit_value >= 3600u) tool_angle_edit_value = 0u;
+                        }
+                        need_render = true;
+                    } else {
+                        menu_back();
+                        need_render = true;
+                    }
+                }
+            } else if (st == MENU_SCREEN_INFO && menu_can_back()) {
                 menu_back();
                 need_render = true;
             } else if (st == MENU_SCREEN_LIST) {
@@ -245,11 +347,28 @@ void screens_process(void)
             need_render = true;
             menu_need_redraw = true;
         }
-        /* Екран ADC/Fault показує живі значення — завжди перемальовувати, щоб tick і ADC оновлювалися */
-        if (cur == SCREEN_ADC_FAULT)
-            need_render = true;
+        /* ADC/Fault — повне оновлення не частіше раз на 250 мс */
+        {
+            static uint32_t last_adc_tick;
+            uint32_t now = HAL_GetTick();
+            if (cur == SCREEN_ADC_FAULT) {
+                if ((now - last_adc_tick) >= 250u)
+                    need_render = true;
+                if (need_render)
+                    last_adc_tick = now;
+            }
+        }
         if (need_render)
             render_current_screen();
+        /* Кут інструменту: тільки рядок з числом оновлювати раз на 300 мс (не в режимі Set) */
+        if (cur == SCREEN_TOOL_ANGLE && !tool_angle_edit_mode) {
+            static uint32_t last_tool_tick;
+            uint32_t now = HAL_GetTick();
+            if ((now - last_tool_tick) >= 300u) {
+                tool_angle_refresh_value_only();
+                last_tool_tick = now;
+            }
+        }
     } else {
         menu_need_redraw = false;
         lcd_clear();
