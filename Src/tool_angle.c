@@ -15,6 +15,9 @@ static uint32_t s_raw_filtered;  /* raw << 8 для дробової части�
 static uint8_t s_raw_inited;
 /* Гістерезис для відображення: змінюємо повернуте значення лише при зміні >= 0.2° */
 #define STABLE_HYST_DEG  0.2f
+/* Зона нуля: кути в [0, 1.0) або [358.0, 360) показуємо як 0.0 (усуває 358.8–0.3 після Zero) */
+#define ZERO_ZONE_HIGH   1.0f
+#define ZERO_ZONE_WRAP   358.0f
 static float s_last_stable_deg = -1.0f;
 
 static void backup_domain_enable(void)
@@ -75,7 +78,13 @@ float tool_angle_get_deg(void)
     while (deg < 0.0f)   deg += 360.0f;
     while (deg >= 360.0f) deg -= 360.0f;
 
-    /* Гістерезис: оновлюємо значення для відображення лише при зміні >= 0.05° */
+    /* Зона нуля: біля 0° або 360° показуємо чистий нуль */
+    if (deg < ZERO_ZONE_HIGH || deg >= ZERO_ZONE_WRAP) {
+        s_last_stable_deg = 0.0f;
+        return 0.0f;
+    }
+
+    /* Гістерезис: оновлюємо значення для відображення лише при зміні >= 0.2° */
     {
         float rounded = (float)(int)(deg * 10.0f + 0.5f) / 10.0f;
         if (s_last_stable_deg < 0.0f) {
