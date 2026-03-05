@@ -8,4 +8,6 @@ float tool_angle_get_deg(void);
 void tool_angle_zero(void);
 /* Vstanovyty vidobrazhuvanyj kut vruchnu: potochna pozycija pokazuvatymetjsja jak deg (0..360). */
 void tool_angle_set_displayed_deg(float deg);
+/* Kalibruvannja: postav enkoder na 180 deg (za shkaloju), vyklyky cju funkciju — K pereraxovujetjsja. */
+void tool_angle_calibrate_180(void);
 #endif

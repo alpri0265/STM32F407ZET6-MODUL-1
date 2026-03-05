@@ -7,9 +7,12 @@
 #define TOOL_ANGLE_MAGIC  0x5441U  /* "TA" */
 #define BKP0R_OFFSET      0x50U    /* RTC->BKP0R */
 #define BKP1R_OFFSET      0x54U    /* RTC->BKP1R */
+#define BKP2R_OFFSET      0x58U    /* RTC->BKP2R — коефіцієнт калібрування K*10000 */
 
 static uint16_t s_ref_raw;
 static float s_ref_deg;
+/* Коефіцієнт калібрування: deg = ref_deg + diff*360/4095*K; 1.0f = без калібрування */
+static float s_calib_k = 1.0f;
 /* Згладжування raw ADC (IIR), щоб одиниці/десяті градуса не скакали */
 static uint32_t s_raw_filtered;  /* raw << 8 для дробової частини */
 static uint8_t s_raw_inited;
@@ -37,19 +40,24 @@ static void tool_angle_persist(void)
 {
     uint32_t deg_tenths = (uint32_t)(s_ref_deg * 10.0f + 0.5f);
     if (deg_tenths > 3600u) deg_tenths = 3600u;
+    uint32_t k_x10000 = (uint32_t)(s_calib_k * 10000.0f + 0.5f);
+    if (k_x10000 < 5000u) k_x10000 = 5000u;   /* min 0.5 */
+    if (k_x10000 > 15000u) k_x10000 = 15000u; /* max 1.5 */
 
     backup_domain_enable();
     *(__IO uint32_t *)(RTC_BASE + BKP0R_OFFSET) = ((uint32_t)TOOL_ANGLE_MAGIC << 16) | (uint32_t)s_ref_raw;
     *(__IO uint32_t *)(RTC_BASE + BKP1R_OFFSET) = deg_tenths;
+    *(__IO uint32_t *)(RTC_BASE + BKP2R_OFFSET) = k_x10000;
 }
 
 void tool_angle_init(void)
 {
-    uint32_t w0, w1;
+    uint32_t w0, w1, w2;
 
     backup_domain_enable();
     w0 = *(__IO uint32_t *)(RTC_BASE + BKP0R_OFFSET);
     w1 = *(__IO uint32_t *)(RTC_BASE + BKP1R_OFFSET);
+    w2 = *(__IO uint32_t *)(RTC_BASE + BKP2R_OFFSET);
 
     if ((w0 >> 16) != TOOL_ANGLE_MAGIC)
         return;
@@ -60,6 +68,8 @@ void tool_angle_init(void)
 
     s_ref_raw = (uint16_t)(w0 & 0xFFFFu);
     s_ref_deg = (float)w1 / 10.0f;
+    if (w2 != 0u && w2 != 0xFFFFFFFFu && w2 >= 5000u && w2 <= 15000u)
+        s_calib_k = (float)w2 / 10000.0f;
 }
 
 float tool_angle_get_deg(void)
@@ -69,12 +79,12 @@ float tool_angle_get_deg(void)
         s_raw_filtered = (uint32_t)raw << 8;
         s_raw_inited = 1;
     } else {
-        /* Дуже сильне згладжування (1/128 нового зразка) */
-        s_raw_filtered = (s_raw_filtered * 127u + ((uint32_t)raw << 8)) / 128u;
+        /* Помірне згладжування (1/8 нового зразка) — швидший відгук при обертанні енкодера */
+        s_raw_filtered = (s_raw_filtered * 7u + ((uint32_t)raw << 8)) / 8u;
     }
     raw = (uint16_t)(s_raw_filtered >> 8);
     int32_t diff = (int32_t)raw - (int32_t)s_ref_raw;
-    float deg = s_ref_deg + (float)diff * 360.0f / 4095.0f;
+    float deg = s_ref_deg + (float)diff * 360.0f / 4095.0f * s_calib_k;
     while (deg < 0.0f)   deg += 360.0f;
     while (deg >= 360.0f) deg -= 360.0f;
 
@@ -116,5 +126,23 @@ void tool_angle_set_displayed_deg(float deg)
     s_ref_deg = deg;
     s_raw_inited = 0;
     s_last_stable_deg = -1.0f;
+    tool_angle_persist();
+}
+
+void tool_angle_calibrate_180(void)
+{
+    /* Оновлюємо фільтр кількома викликами, щоб поточний raw був стабільний */
+    for (int i = 0; i < 8; i++)
+        (void)tool_angle_get_deg();
+    uint16_t raw = (uint16_t)(s_raw_filtered >> 8);
+    int32_t diff = (int32_t)raw - (int32_t)s_ref_raw;
+    int32_t adiff = diff >= 0 ? diff : -diff;
+    if (adiff < 50)
+        return; /* Замала різниця — пропускаємо, щоб уникнути ділення на мале число */
+    /* 180° = ref_deg + diff * 360/4095 * K  =>  K = 180 / (diff * 360/4095) = 180*4095/(360*diff) */
+    float k = 180.0f * 4095.0f / (360.0f * (float)adiff);
+    if (k < 0.5f) k = 0.5f;
+    if (k > 1.5f) k = 1.5f;
+    s_calib_k = k;
     tool_angle_persist();
 }

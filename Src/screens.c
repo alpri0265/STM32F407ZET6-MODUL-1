@@ -161,6 +161,20 @@ static void render_info_adc_fault(void)
     lcd_print_line(3, buf);
 }
 
+static void render_info_tool_angle_calib(void)
+{
+    float deg = tool_angle_get_deg();
+    unsigned int d = (unsigned int)deg;
+    unsigned int t = (unsigned int)(deg * 10.0f) % 10u;
+    char buf[LINE_LEN + 4];
+    lcd_print_line(0, "Calibrate encoder   ");
+    lcd_print_line(1, "Set to 180 deg then ");
+    lcd_print_line(2, "Enter=Cal Up=Back   ");
+    (void)snprintf(buf, sizeof(buf), "  Now: %u.%u %c      ", d, t, 0xFF);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line_deg(3, buf);
+}
+
 static void render_info_tool_angle(void)
 {
     char buf[LINE_LEN + 4];
@@ -240,7 +254,8 @@ static void render_info_screen(menu_screen_id_t id)
         case SCREEN_ENCODERS:  render_info_encoders();  break;
         case SCREEN_LIMITS:    render_info_limits();    break;
         case SCREEN_ADC_FAULT: render_info_adc_fault();  break;
-        case SCREEN_TOOL_ANGLE: render_info_tool_angle(); break;
+        case SCREEN_TOOL_ANGLE:     render_info_tool_angle();     break;
+        case SCREEN_TOOL_ANGLE_CALIB: render_info_tool_angle_calib(); break;
         case SCREEN_INFO:      render_info_info();      break;
         default:
             lcd_print_line(0, "Unknown screen     ");
@@ -324,6 +339,14 @@ void screens_process(void)
                         need_render = true;
                     }
                 }
+            } else if (cur == SCREEN_TOOL_ANGLE_CALIB && menu_can_back()) {
+                if (act == ENCODER_MENU_ACTION_ENTER) {
+                    tool_angle_calibrate_180();
+                    need_render = true;
+                } else if (act == ENCODER_MENU_ACTION_CCW) {
+                    menu_back();
+                    need_render = true;
+                }
             } else if (st == MENU_SCREEN_INFO && menu_can_back()) {
                 menu_back();
                 need_render = true;
@@ -360,13 +383,28 @@ void screens_process(void)
         }
         if (need_render)
             render_current_screen();
-        /* Кут інструменту: тільки рядок з числом оновлювати раз на 300 мс (не в режимі Set) */
+        /* Кут інструменту: тільки рядок з числом оновлювати раз на 100 мс (не в режимі Set) */
         if (cur == SCREEN_TOOL_ANGLE && !tool_angle_edit_mode) {
             static uint32_t last_tool_tick;
             uint32_t now = HAL_GetTick();
-            if ((now - last_tool_tick) >= 300u) {
+            if ((now - last_tool_tick) >= 100u) {
                 tool_angle_refresh_value_only();
                 last_tool_tick = now;
+            }
+        }
+        /* Екран калібрування: оновлювати рядок "Now" кожні 100 мс */
+        if (cur == SCREEN_TOOL_ANGLE_CALIB) {
+            static uint32_t last_calib_tick;
+            uint32_t now = HAL_GetTick();
+            if ((now - last_calib_tick) >= 100u) {
+                float deg = tool_angle_get_deg();
+                unsigned int d = (unsigned int)deg;
+                unsigned int t = (unsigned int)(deg * 10.0f) % 10u;
+                char buf[LINE_LEN + 4];
+                (void)snprintf(buf, sizeof(buf), "  Now: %u.%u %c      ", d, t, 0xFF);
+                buf[LINE_LEN] = '\0';
+                lcd_print_line_deg(3, buf);
+                last_calib_tick = now;
             }
         }
     } else {
