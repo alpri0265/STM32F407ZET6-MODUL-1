@@ -4,6 +4,7 @@
 #include "screens.h"
 #include "bringup_config.h"
 #include "system_config.h"
+#include "tool_angle.h"
 #if BRINGUP_MODE
 #include "encoder_menu.h"
 #include "menu.h"
@@ -16,6 +17,7 @@ void app_init(void)
 {
     system_state_init();
     system_config_init();
+    tool_angle_init();  /* load saved ref from Flash */
     events_init();
 #if BRINGUP_MODE
     menu_init();

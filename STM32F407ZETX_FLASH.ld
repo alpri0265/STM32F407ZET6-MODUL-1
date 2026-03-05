@@ -47,7 +47,8 @@ MEMORY
 {
   CCMRAM    (xrw)    : ORIGIN = 0x10000000,   LENGTH = 64K
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 128K
-  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 512K
+  /* 384K for program; last 128K (sector 11) reserved for tool_angle NV storage */
+  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 384K
 }
 
 /* Sections */
