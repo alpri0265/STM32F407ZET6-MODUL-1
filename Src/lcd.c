@@ -34,6 +34,7 @@ static void lcd_load_degree_char(void)
     lcd_send(0x00, 1);
     lcd_send(0x00, 1);
     lcd_send(0x00, 1);
+    lcd_send(0x80, 0);  /* повернути адресу в DDRAM (рядок 0), щоб не губились перші символи */
 }
 
 void lcd_init(void)
@@ -46,7 +47,6 @@ void lcd_init(void)
     lcd_send(0x06, 0);
     lcd_send(0x01, 0);
     HAL_Delay(5);
-    lcd_load_degree_char();
 }
 
 void lcd_clear(void)
@@ -75,7 +75,12 @@ void lcd_print_line(uint8_t row, const char *str)
 
 void lcd_print_line_deg(uint8_t row, const char *str)
 {
+    static uint8_t degree_loaded;
     if (row > 3) return;
+    if (!degree_loaded) {
+        lcd_load_degree_char();
+        degree_loaded = 1;
+    }
     lcd_send(0x80 | row_addr[row], 0);
     while (*str) {
         uint8_t c = (uint8_t)*str++;

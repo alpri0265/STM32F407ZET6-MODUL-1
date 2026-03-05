@@ -186,7 +186,7 @@ static void render_info_tool_angle(void)
         float deg = tool_angle_get_deg();
         unsigned int d = (unsigned int)deg;
         unsigned int t = (unsigned int)(deg * 10.0f) % 10u;
-        lcd_print_line(0, "Kut instrumentu        ");
+        lcd_print_line(0, "  Kut instrumentu      ");
         (void)snprintf(buf, sizeof(buf), "  %u.%u %c            ", d, t, 0xFF);
         buf[LINE_LEN] = '\0';
         lcd_print_line_deg(1, buf);
