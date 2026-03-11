@@ -19,6 +19,10 @@
 #define ENA_ACTIVE_HIGH        0
 /* 1 = на екрані Jog постійно кроки X/Z без джойстика (тест проводки/драйвера). Потім поставити 0. */
 #define JOG_ALWAYS_RUN_TEST    1
+/* Кнопка пришвидшеної подачі: використовуємо SCALE_0 (PC0). Натиснуто = LOW (на землю). */
+#define RAPID_BTN_GPIO_Port    SCALE_0_GPIO_Port
+#define RAPID_BTN_Pin          SCALE_0_Pin
+#define RAPID_BTN_ACTIVE_LOW   1
 
 static uint32_t s_last_step_tick;
 static uint32_t s_step_count_x;
@@ -32,6 +36,15 @@ static void step_pulse_delay(void)
 static void dir_settle_delay(void)
 {
     for (volatile uint32_t i = 0u; i < JOG_DIR_SETTLE; i++) (void)0;
+}
+
+static bool rapid_pressed(void)
+{
+    GPIO_PinState s = HAL_GPIO_ReadPin(RAPID_BTN_GPIO_Port, RAPID_BTN_Pin);
+    if (RAPID_BTN_ACTIVE_LOW)
+        return (s == GPIO_PIN_RESET);
+    else
+        return (s == GPIO_PIN_SET);
 }
 
 static void pulse_x_step(void)
@@ -88,6 +101,14 @@ void jog_init(void)
     HAL_GPIO_WritePin(X_EN_GPIO_Port, X_EN_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(Z_EN_GPIO_Port, Z_EN_Pin, GPIO_PIN_RESET);
 #endif
+
+    /* Кнопка Rapid (SCALE_0 / PC0): вхід з підтяжкою вгору, натиснуто = до GND. */
+    GPIO_InitTypeDef b = {0};
+    b.Pin = RAPID_BTN_Pin;
+    b.Mode = GPIO_MODE_INPUT;
+    b.Pull = GPIO_PULLUP;
+    b.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(RAPID_BTN_GPIO_Port, &b);
 }
 
 /* 1 = рух від джойстика (JOY_UP/DOWN/LEFT/RIGHT), 0 = рух від кнопок меню */
@@ -141,6 +162,8 @@ void jog_process(void)
         return;
 
     s_last_step_tick = now;
+    /* Rapid: при натиснутій кнопці робимо декілька кроків за одне опитування (~3× швидше). */
+    int repeat = rapid_pressed() ? 3 : 1;
 
 #if JOG_ALWAYS_RUN_TEST
     /* Тест без джойстика: постійно кроки X та Z по черзі. Якщо двигуни рухаються — проводка/драйвер ОК, постав JOG_ALWAYS_RUN_TEST 0. */
@@ -149,11 +172,13 @@ void jog_process(void)
         if (alt) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
             dir_settle_delay();
-            pulse_z_step();
+            for (int i = 0; i < repeat; i++)
+                pulse_z_step();
         } else {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
             dir_settle_delay();
-            pulse_x_step();
+            for (int i = 0; i < repeat; i++)
+                pulse_x_step();
         }
         alt = 1 - alt;
         return;
@@ -165,25 +190,29 @@ void jog_process(void)
     if (joy_up()) {
         HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
         dir_settle_delay();
-        pulse_z_step();
+        for (int i = 0; i < repeat; i++)
+            pulse_z_step();
         return;
     }
     if (joy_down()) {
         HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
         dir_settle_delay();
-        pulse_z_step();
+        for (int i = 0; i < repeat; i++)
+            pulse_z_step();
         return;
     }
     if (joy_left()) {
         HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
         dir_settle_delay();
-        pulse_x_step();
+        for (int i = 0; i < repeat; i++)
+            pulse_x_step();
         return;
     }
     if (joy_right()) {
         HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
         dir_settle_delay();
-        pulse_x_step();
+        for (int i = 0; i < repeat; i++)
+            pulse_x_step();
         return;
     }
 #else
@@ -203,18 +232,22 @@ void jog_process(void)
     if (axis_mode == 0) {
         if (up) {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
-            pulse_x_step();
+            for (int i = 0; i < repeat; i++)
+                pulse_x_step();
         } else if (down) {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
-            pulse_x_step();
+            for (int i = 0; i < repeat; i++)
+                pulse_x_step();
         }
     } else {
         if (up) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
-            pulse_z_step();
+            for (int i = 0; i < repeat; i++)
+                pulse_z_step();
         } else if (down) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
-            pulse_z_step();
+            for (int i = 0; i < repeat; i++)
+                pulse_z_step();
         }
     }
 #endif
