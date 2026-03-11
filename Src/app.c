@@ -8,6 +8,7 @@
 #if BRINGUP_MODE
 #include "encoder_menu.h"
 #include "menu.h"
+#include "jog.h"
 #else
 #include "planner.h"
 #include "safety.h"
@@ -22,6 +23,7 @@ void app_init(void)
 #if BRINGUP_MODE
     menu_init();
     encoder_menu_init();
+    jog_init();
 #else
     planner_init();
     safety_init();
@@ -36,6 +38,9 @@ void app_loop(void)
 #if !BRINGUP_MODE
     safety_process();
     planner_process();
+#endif
+#if BRINGUP_MODE
+    jog_process();
 #endif
     screens_process();
 }

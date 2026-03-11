@@ -2,15 +2,16 @@
 #define BOARD_H
 #include "stm32f4xx_hal.h"
 
+/* Крокові виходи: узгоджено з main.h (PA8/PA9/PA10, PB6/PB7/PB8) */
 #define X_STEP_PORT GPIOA
-#define X_STEP_PIN  GPIO_PIN_0
+#define X_STEP_PIN  GPIO_PIN_8
 #define X_DIR_PORT  GPIOA
-#define X_DIR_PIN   GPIO_PIN_1
+#define X_DIR_PIN   GPIO_PIN_9
 
-#define Z_STEP_PORT GPIOA
-#define Z_STEP_PIN  GPIO_PIN_2
-#define Z_DIR_PORT  GPIOA
-#define Z_DIR_PIN   GPIO_PIN_3
+#define Z_STEP_PORT GPIOB
+#define Z_STEP_PIN  GPIO_PIN_6
+#define Z_DIR_PORT  GPIOB
+#define Z_DIR_PIN   GPIO_PIN_7
 
 #define ESTOP_PORT  GPIOD
 /* ADC channels mapping */

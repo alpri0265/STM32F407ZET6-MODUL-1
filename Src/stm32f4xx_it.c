@@ -23,6 +23,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "enc_if.h"
+#include "bringup_config.h"
+#if BRINGUP_MODE
+#include "jog.h"
+#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -244,6 +248,10 @@ void TIM6_DAC_IRQHandler(void)
   if ((TIM6->SR & TIM_SR_UIF) != 0) {
     TIM6->SR = ~(uint32_t)TIM_SR_UIF;
     enc_if_poll_1ms();
+#if BRINGUP_MODE
+    /* Джог з таймера — стабільна частота кроків (~500/с), не залежить від повільного циклу з I2C */
+    jog_process();
+#endif
   }
 }
 

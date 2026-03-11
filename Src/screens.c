@@ -12,6 +12,7 @@
 #include "tool_angle.h"
 #include "board.h"
 #include "adc_if.h"
+#include "jog.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -56,13 +57,18 @@ static void render_info_jog(void)
 {
     float x_mm = axis_feedback_pos_mm(AXIS_X);
     float z_mm = axis_feedback_pos_mm(AXIS_Z);
+    unsigned int ju, jd, jl, jr;
+    uint32_t steps_x, steps_z;
+    jog_get_joy_state(&ju, &jd, &jl, &jr);
+    jog_get_step_counts(&steps_x, &steps_z);
     char buf[LINE_LEN + 2];
-    lcd_print_line(0, "Jog - use joystick");
-    (void)snprintf(buf, sizeof(buf), "X: %.2f mm", (double)x_mm);
+    lcd_print_line(0, "Jog - joystick     ");
+    (void)snprintf(buf, sizeof(buf), "X: %.2f  StX:%lu   ", (double)x_mm, (unsigned long)steps_x);
     lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "Z: %.2f mm", (double)z_mm);
+    (void)snprintf(buf, sizeof(buf), "Z: %.2f  StZ:%lu   ", (double)z_mm, (unsigned long)steps_z);
     lcd_print_line(2, buf);
-    lcd_print_line(3, "[Back]             ");
+    (void)snprintf(buf, sizeof(buf), "U:%u D:%u L:%u R:%u Up=Back", ju, jd, jl, jr);
+    lcd_print_line(3, buf);
 }
 
 static void render_info_axis_x(void)
@@ -99,10 +105,11 @@ static void render_info_spindle(void)
     lcd_print_line(3, "[Back]             ");
 }
 
-static bool limits_read_x_neg(void) { return HAL_GPIO_ReadPin(LIM_X_NEG_GPIO_Port, LIM_X_NEG_Pin) == GPIO_PIN_SET; }
-static bool limits_read_x_pos(void) { return HAL_GPIO_ReadPin(LIM_X_POS_GPIO_Port, LIM_X_POS_Pin) == GPIO_PIN_SET; }
-static bool limits_read_z_neg(void) { return HAL_GPIO_ReadPin(LIM_Z_NEG_GPIO_Port, LIM_Z_NEG_Pin) == GPIO_PIN_SET; }
-static bool limits_read_z_pos(void) { return HAL_GPIO_ReadPin(LIM_Z_POS_GPIO_Port, LIM_Z_POS_Pin) == GPIO_PIN_SET; }
+/* Усі кінцевики — індуктивні NPN: спрацювання = LOW (вихід сенсора в GND) */
+static bool limits_read_x_neg(void) { return HAL_GPIO_ReadPin(LIM_X_NEG_GPIO_Port, LIM_X_NEG_Pin) == GPIO_PIN_RESET; }
+static bool limits_read_x_pos(void) { return HAL_GPIO_ReadPin(LIM_X_POS_GPIO_Port, LIM_X_POS_Pin) == GPIO_PIN_RESET; }
+static bool limits_read_z_neg(void) { return HAL_GPIO_ReadPin(LIM_Z_NEG_GPIO_Port, LIM_Z_NEG_Pin) == GPIO_PIN_RESET; }
+static bool limits_read_z_pos(void) { return HAL_GPIO_ReadPin(LIM_Z_POS_GPIO_Port, LIM_Z_POS_Pin) == GPIO_PIN_RESET; }
 
 static void render_info_limits(void)
 {
@@ -347,6 +354,12 @@ void screens_process(void)
                     menu_back();
                     need_render = true;
                 }
+            } else if (cur == SCREEN_JOG && menu_can_back()) {
+                if (act == ENCODER_MENU_ACTION_CCW) {
+                    menu_back();
+                    need_render = true;
+                }
+                /* Enter і CW — для Jog (перемикання осі, рух), не виходимо */
             } else if (st == MENU_SCREEN_INFO && menu_can_back()) {
                 menu_back();
                 need_render = true;
@@ -371,14 +384,29 @@ void screens_process(void)
             menu_need_redraw = true;
         }
         /* ADC/Fault — повне оновлення не частіше раз на 250 мс */
+        /* Limits — оновлення кожні 150 мс, щоб кінцевики відображалися в реальному часі */
         {
             static uint32_t last_adc_tick;
+            static uint32_t last_limits_tick;
+            static uint32_t last_jog_tick;
             uint32_t now = HAL_GetTick();
             if (cur == SCREEN_ADC_FAULT) {
                 if ((now - last_adc_tick) >= 250u)
                     need_render = true;
                 if (need_render)
                     last_adc_tick = now;
+            }
+            if (cur == SCREEN_LIMITS) {
+                if ((now - last_limits_tick) >= 150u)
+                    need_render = true;
+                if (need_render)
+                    last_limits_tick = now;
+            }
+            if (cur == SCREEN_JOG) {
+                if ((now - last_jog_tick) >= 100u)
+                    need_render = true;
+                if (need_render)
+                    last_jog_tick = now;
             }
         }
         if (need_render)
