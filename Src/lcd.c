@@ -63,12 +63,17 @@ void lcd_print(const char *str)
 
 static const uint8_t row_addr[] = { 0x00, 0x40, 0x14, 0x54 };
 
+#define LCD_COLS 20
+
 void lcd_print_line(uint8_t row, const char *str)
 {
+    unsigned int n = 0;
     if (row > 3) return;
     lcd_send(0x80 | row_addr[row], 0);
-    while (*str)
+    while (*str && n < LCD_COLS) {
         lcd_send((uint8_t)*str++, 1);
+        n++;
+    }
 }
 
 #define DEG_PLACEHOLDER 0xFF

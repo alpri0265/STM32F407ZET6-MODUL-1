@@ -59,18 +59,41 @@ static void render_info_jog(void)
     float z_mm = axis_feedback_pos_mm(AXIS_Z);
     unsigned int ju, jd, jl, jr, rapid;
     uint32_t steps_x, steps_z;
-    uint16_t feed_raw = adc_if_read(ADC_CH_FEED_OVERRIDE);
     jog_get_joy_state(&ju, &jd, &jl, &jr);
     jog_get_step_counts(&steps_x, &steps_z);
     jog_get_rapid_state(&rapid);
     char buf[LINE_LEN + 2];
-    lcd_print_line(0, "Jog - joystick     ");
-    (void)snprintf(buf, sizeof(buf), "X: %.2f  StX:%lu   ", (double)x_mm, (unsigned long)steps_x);
+    lcd_print_line(0, "                    ");
+    (void)snprintf(buf, sizeof(buf), "X: %.2f StX:%lu    ", (double)x_mm, (unsigned long)steps_x);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "Z: %.2f  StZ:%lu   ", (double)z_mm, (unsigned long)steps_z);
+    (void)snprintf(buf, sizeof(buf), "Z: %.2f StZ:%lu    ", (double)z_mm, (unsigned long)steps_z);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u F:%u%%", ju, jd, jl, jr, rapid, 30u + ((unsigned)feed_raw * 120u) / 4095u);
+    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u Up=Bk", ju, jd, jl, jr, rapid);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
+}
+
+static void render_info_feed_manual(void)
+{
+    uint16_t feed_raw = adc_if_read(ADC_CH_FEED_OVERRIDE);
+    unsigned int feed_pct = 30u + ((unsigned)feed_raw * 120u) / 4095u;
+    char buf[LINE_LEN + 2];
+    lcd_print_line(0, "Manual feed        ");
+    (void)snprintf(buf, sizeof(buf), "Pot: %u%%           ", feed_pct);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(1, buf);
+    lcd_print_line(2, "PA4 potentiometer  ");
+    lcd_print_line(3, "[Back]             ");
+}
+
+static void render_info_feed_auto(void)
+{
+    lcd_print_line(0, "Automatic feed     ");
+    lcd_print_line(1, "From G-code        ");
+    lcd_print_line(2, "                  ");
+    lcd_print_line(3, "[Back]             ");
 }
 
 static void render_info_axis_x(void)
@@ -165,7 +188,7 @@ static void render_info_adc_fault(void)
     (void)snprintf(buf, sizeof(buf), "Enc: %u.%u %c          ", enc_d, enc_t, 0xFF);
     buf[LINE_LEN] = '\0';
     lcd_print_line_deg(2, buf);
-    (void)snprintf(buf, sizeof(buf), "Fault: %u  [Back]    ", (unsigned)fault);
+    (void)snprintf(buf, sizeof(buf), "Fault: %u [Back]    ", (unsigned)fault);
     buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
 }
@@ -196,7 +219,7 @@ static void render_info_tool_angle(void)
         (void)snprintf(buf, sizeof(buf), "Set angle (%c)        ", 0xFF);
         buf[LINE_LEN] = '\0';
         lcd_print_line_deg(0, buf);
-        (void)snprintf(buf, sizeof(buf), "Set: %u%u%u.%u %c      ", h, t, o, d, 0xFF);
+        (void)snprintf(buf, sizeof(buf), "Set: %u%u%u.%u%c     ", h, t, o, d, 0xFF);
         buf[LINE_LEN] = '\0';
         lcd_print_line_deg(1, buf);
         /* Курсор під розрядом: "Set: " = 5 символів, потім цифри 5,6,7, крапка 8, цифра 9 */
@@ -256,6 +279,8 @@ static void render_info_screen(menu_screen_id_t id)
 {
     switch (id) {
         case SCREEN_JOG:       render_info_jog();       break;
+        case SCREEN_FEED_MANUAL: render_info_feed_manual(); break;
+        case SCREEN_FEED_AUTO:   render_info_feed_auto();   break;
         case SCREEN_AXIS_X:    render_info_axis_x();    break;
         case SCREEN_AXIS_Z:    render_info_axis_z();    break;
         case SCREEN_SPINDLE:   render_info_spindle();   break;
@@ -409,6 +434,12 @@ void screens_process(void)
                     need_render = true;
                 if (need_render)
                     last_jog_tick = now;
+            }
+            if (cur == SCREEN_FEED_MANUAL) {
+                if ((now - last_adc_tick) >= 250u)
+                    need_render = true;
+                if (need_render)
+                    last_adc_tick = now;
             }
         }
         if (need_render)

@@ -42,7 +42,7 @@ void app_loop(void)
     planner_process();
 #endif
 #if BRINGUP_MODE
-    if (menu_current_screen() == SCREEN_JOG) {
+    if (menu_current_screen() == SCREEN_JOG || menu_current_screen() == SCREEN_FEED_MANUAL) {
         uint16_t f = adc_if_read(ADC_CH_FEED_OVERRIDE);
         jog_set_feed_override(f);
     }
