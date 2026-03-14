@@ -1,5 +1,7 @@
 #include "jog.h"
 #include "main.h"
+#include "board.h"
+#include "adc_if.h"
 #include "bringup_config.h"
 #include "menu.h"
 #include <stdint.h>
@@ -9,10 +11,11 @@
 
 /* Підключення до драйвера (DM556): PUL = STEP, DIR = напрямок, ENA = дозвіл.
    В main.h: X — PA8=PUL, PA9=DIR, PA10=ENA; Z — PB6=PUL, PB7=DIR, PB8=ENA. */
-#define JOG_STEP_PERIOD_MS      2u  /* мс між кроками в нормальному режимі (~500 кроків/с) */
-#define JOG_STEP_PERIOD_RAPID_MS 1u  /* мс при rapid — менший період = рівномірно швидше (без burst) */
-#define JOG_PULSE_CYCLES    8000u  /* тривалість імпульсу ~48 µs при 168 MHz (деякі драйвери потребують 10–50 µs) */
-#define JOG_DIR_SETTLE      400u   /* циклів після встановлення DIR перед STEP (~2.4 µs) */
+#define JOG_STEP_PERIOD_MS       4u  /* мс між кроками (база) — більший діапазон для rapid */
+#define JOG_STEP_PERIOD_RAPID_MS 1u  /* мс при rapid — завжди 2–4× швидше */
+/* Feed override: ADC 0..4095 → scale 50..150%. period = base*100/scale, min 1 ms */
+#define JOG_PULSE_CYCLES    8000u  /* тривалість імпульсу ~48 µs при 168 MHz */
+#define JOG_DIR_SETTLE      400u   /* циклів після DIR перед STEP (~2.4 µs) */
 
 /* 1 = імпульс кроку активний по LOW (idle HIGH, pulse LOW); 0 = активний по HIGH */
 #define STEP_PULSE_ACTIVE_LOW  0
@@ -28,6 +31,7 @@
 static uint32_t s_last_step_tick;
 static uint32_t s_step_count_x;
 static uint32_t s_step_count_z;
+static uint16_t s_feed_override_cached = 2048u;  /* 50% по замовчуванню, оновлюється з main loop */
 
 static void step_pulse_delay(void)
 {
@@ -144,6 +148,11 @@ void jog_get_rapid_state(unsigned int *rapid)
 {
     if (rapid) *rapid = rapid_pressed() ? 1u : 0u;
 }
+
+void jog_set_feed_override(uint16_t raw)
+{
+    s_feed_override_cached = raw;
+}
 #else
 void jog_get_joy_state(unsigned int *up, unsigned int *down, unsigned int *left, unsigned int *right)
 {
@@ -161,6 +170,10 @@ void jog_get_rapid_state(unsigned int *rapid)
 {
     if (rapid) *rapid = 0u;
 }
+void jog_set_feed_override(uint16_t raw)
+{
+    s_feed_override_cached = raw;
+}
 #endif
 
 void jog_process(void)
@@ -168,12 +181,18 @@ void jog_process(void)
     if (menu_current_screen() != SCREEN_JOG)
         return;
     uint32_t now = HAL_GetTick();
-    uint32_t period_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
+    uint32_t base_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
+    uint16_t feed_raw = s_feed_override_cached;  /* оновлюється з main loop, не з ISR */
+    /* Feed 0..4095 → scale 30..150%, period = base*100/scale, min 1 */
+    uint32_t scale = 30u + ((uint32_t)feed_raw * 120u) / 4095u;
+    if (scale < 10u) scale = 10u;
+    uint32_t period_ms = (base_ms * 100u) / scale;
+    if (period_ms < 1u) period_ms = 1u;
+
     if ((now - s_last_step_tick) < period_ms)
         return;
 
     s_last_step_tick = now;
-    /* Rapid: період 1 ms замість 2 ms → рівномірно ~2× швидше. */
 
 #if JOG_ALWAYS_RUN_TEST
     /* Тест без джойстика: постійно кроки X та Z по черзі. Якщо двигуни рухаються — проводка/драйвер ОК, постав JOG_ALWAYS_RUN_TEST 0. */
@@ -236,17 +255,21 @@ void jog_process(void)
     if (axis_mode == 0) {
         if (up) {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
+            dir_settle_delay();
             pulse_x_step();
         } else if (down) {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
+            dir_settle_delay();
             pulse_x_step();
         }
     } else {
         if (up) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
+            dir_settle_delay();
             pulse_z_step();
         } else if (down) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
+            dir_settle_delay();
             pulse_z_step();
         }
     }
@@ -268,4 +291,9 @@ void jog_get_step_counts(uint32_t *x, uint32_t *z)
     if (x) *x = 0u;
     if (z) *z = 0u;
 }
+void jog_get_rapid_state(unsigned int *rapid)
+{
+    if (rapid) *rapid = 0u;
+}
+void jog_set_feed_override(uint16_t raw) { (void)raw; }
 #endif

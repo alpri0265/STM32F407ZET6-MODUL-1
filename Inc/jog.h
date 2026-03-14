@@ -10,4 +10,6 @@ void jog_get_joy_state(unsigned int *up, unsigned int *down, unsigned int *left,
 void jog_get_step_counts(uint32_t *x, uint32_t *z);
 /* Стан кнопки пришвидшення: 1 = натиснуто (швидший рух). */
 void jog_get_rapid_state(unsigned int *rapid);
+/* Встановити кеш feed override (raw 0..4095). */
+void jog_set_feed_override(uint16_t raw);
 #endif

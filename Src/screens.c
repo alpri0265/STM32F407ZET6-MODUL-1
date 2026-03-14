@@ -59,6 +59,7 @@ static void render_info_jog(void)
     float z_mm = axis_feedback_pos_mm(AXIS_Z);
     unsigned int ju, jd, jl, jr, rapid;
     uint32_t steps_x, steps_z;
+    uint16_t feed_raw = adc_if_read(ADC_CH_FEED_OVERRIDE);
     jog_get_joy_state(&ju, &jd, &jl, &jr);
     jog_get_step_counts(&steps_x, &steps_z);
     jog_get_rapid_state(&rapid);
@@ -68,7 +69,7 @@ static void render_info_jog(void)
     lcd_print_line(1, buf);
     (void)snprintf(buf, sizeof(buf), "Z: %.2f  StZ:%lu   ", (double)z_mm, (unsigned long)steps_z);
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u Up=Back", ju, jd, jl, jr, rapid);  /* * = Rapid */
+    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u F:%u%%", ju, jd, jl, jr, rapid, 30u + ((unsigned)feed_raw * 120u) / 4095u);
     lcd_print_line(3, buf);
 }
 

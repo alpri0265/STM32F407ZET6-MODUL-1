@@ -9,6 +9,8 @@
 #include "encoder_menu.h"
 #include "menu.h"
 #include "jog.h"
+#include "board.h"
+#include "adc_if.h"
 #else
 #include "planner.h"
 #include "safety.h"
@@ -40,6 +42,10 @@ void app_loop(void)
     planner_process();
 #endif
 #if BRINGUP_MODE
+    if (menu_current_screen() == SCREEN_JOG) {
+        uint16_t f = adc_if_read(ADC_CH_FEED_OVERRIDE);
+        jog_set_feed_override(f);
+    }
     jog_process();
 #endif
     screens_process();
