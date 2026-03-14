@@ -249,8 +249,7 @@ void TIM6_DAC_IRQHandler(void)
     TIM6->SR = ~(uint32_t)TIM_SR_UIF;
     enc_if_poll_1ms();
 #if BRINGUP_MODE
-    /* Джог з таймера — стабільна частота кроків (~500/с), не залежить від повільного циклу з I2C */
-    jog_process();
+    jog_tick_from_isr();  /* джойстик без меню — працює на всіх екранах */
 #endif
   }
 }
@@ -261,11 +260,12 @@ void TIM6_DAC_IRQHandler(void)
 void TIM1_UP_TIM10_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 0 */
+#if !BRINGUP_MODE
 	if (__HAL_TIM_GET_FLAG(&htim1, TIM_FLAG_UPDATE)) {
 	        __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
 	        HAL_GPIO_TogglePin(X_STEP_GPIO_Port, X_STEP_Pin);
-
 	    }
+#endif
   /* USER CODE END TIM1_UP_TIM10_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 1 */

@@ -11,6 +11,7 @@
 #include "jog.h"
 #include "board.h"
 #include "adc_if.h"
+#include "sl_limits.h"
 #else
 #include "planner.h"
 #include "safety.h"
@@ -26,6 +27,7 @@ void app_init(void)
     menu_init();
     encoder_menu_init();
     jog_init();
+    sl_limits_init();
 #else
     planner_init();
     safety_init();
@@ -42,9 +44,16 @@ void app_loop(void)
     planner_process();
 #endif
 #if BRINGUP_MODE
-    if (menu_current_screen() == SCREEN_JOG || menu_current_screen() == SCREEN_FEED_MANUAL) {
+    if (menu_current_screen() == SCREEN_JOG || menu_current_screen() == SCREEN_FEED
+        || menu_current_screen() == SCREEN_FEED_MANUAL || menu_current_screen() == SCREEN_FEED_AUTO) {
         uint16_t f = adc_if_read(ADC_CH_FEED_OVERRIDE);
         jog_set_feed_override(f);
+    }
+    if (menu_current_screen() == SCREEN_FEED_AUTO || menu_current_screen() == SCREEN_JOG
+        || menu_current_screen() == SCREEN_FEED) {
+        float xm, zm;
+        jog_get_pos_mm(&xm, &zm);
+        sl_limits_process(xm, zm);
     }
     jog_process();
 #endif

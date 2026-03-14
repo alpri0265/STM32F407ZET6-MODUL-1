@@ -13,6 +13,7 @@
 #include "board.h"
 #include "adc_if.h"
 #include "jog.h"
+#include "sl_limits.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -55,8 +56,8 @@ static void render_list_screen(void)
 
 static void render_info_jog(void)
 {
-    float x_mm = axis_feedback_pos_mm(AXIS_X);
-    float z_mm = axis_feedback_pos_mm(AXIS_Z);
+    float x_mm = 0.0f, z_mm = 0.0f;
+    jog_get_pos_mm(&x_mm, &z_mm);
     unsigned int ju, jd, jl, jr, rapid;
     uint32_t steps_x, steps_z;
     jog_get_joy_state(&ju, &jd, &jl, &jr);
@@ -90,10 +91,19 @@ static void render_info_feed_manual(void)
 
 static void render_info_feed_auto(void)
 {
-    lcd_print_line(0, "Automatic feed     ");
-    lcd_print_line(1, "From G-code        ");
-    lcd_print_line(2, "                  ");
-    lcd_print_line(3, "[Back]             ");
+    float x_mm = 0.0f, z_mm = 0.0f;
+    jog_get_pos_mm(&x_mm, &z_mm);
+    bool x_ok = sl_limits_x_taught();
+    bool z_ok = sl_limits_z_taught();
+    char buf[LINE_LEN + 2];
+    lcd_print_line(0, "Feed Auto: X Z     ");
+    (void)snprintf(buf, sizeof(buf), "X:%.1f Z:%.1f mm   ", (double)x_mm, (double)z_mm);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(1, buf);
+    (void)snprintf(buf, sizeof(buf), "X%c Z%c UDLR=move  ", x_ok ? '+' : '-', z_ok ? '+' : '-');
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(2, buf);
+    lcd_print_line(3, "SL btn=teach [Back]");
 }
 
 static void render_info_axis_x(void)
@@ -381,7 +391,7 @@ void screens_process(void)
                     menu_back();
                     need_render = true;
                 }
-            } else if (cur == SCREEN_JOG && menu_can_back()) {
+            } else if ((cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO) && menu_can_back()) {
                 if (act == ENCODER_MENU_ACTION_CCW) {
                     menu_back();
                     need_render = true;
@@ -429,7 +439,7 @@ void screens_process(void)
                 if (need_render)
                     last_limits_tick = now;
             }
-            if (cur == SCREEN_JOG) {
+            if (cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO) {
                 if ((now - last_jog_tick) >= 100u)
                     need_render = true;
                 if (need_render)
