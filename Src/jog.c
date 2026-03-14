@@ -9,7 +9,8 @@
 
 /* Підключення до драйвера (DM556): PUL = STEP, DIR = напрямок, ENA = дозвіл.
    В main.h: X — PA8=PUL, PA9=DIR, PA10=ENA; Z — PB6=PUL, PB7=DIR, PB8=ENA. */
-#define JOG_STEP_PERIOD_MS  2u     /* мс між кроками (~500 кроків/с) */
+#define JOG_STEP_PERIOD_MS      2u  /* мс між кроками в нормальному режимі (~500 кроків/с) */
+#define JOG_STEP_PERIOD_RAPID_MS 1u  /* мс при rapid — менший період = рівномірно швидше (без burst) */
 #define JOG_PULSE_CYCLES    8000u  /* тривалість імпульсу ~48 µs при 168 MHz (деякі драйвери потребують 10–50 µs) */
 #define JOG_DIR_SETTLE      400u   /* циклів після встановлення DIR перед STEP (~2.4 µs) */
 
@@ -167,12 +168,12 @@ void jog_process(void)
     if (menu_current_screen() != SCREEN_JOG)
         return;
     uint32_t now = HAL_GetTick();
-    if ((now - s_last_step_tick) < JOG_STEP_PERIOD_MS)
+    uint32_t period_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
+    if ((now - s_last_step_tick) < period_ms)
         return;
 
     s_last_step_tick = now;
-    /* Rapid: при натиснутій кнопці — 4× більше кроків за тик (~4× швидше). */
-    int repeat = rapid_pressed() ? 4 : 1;
+    /* Rapid: період 1 ms замість 2 ms → рівномірно ~2× швидше. */
 
 #if JOG_ALWAYS_RUN_TEST
     /* Тест без джойстика: постійно кроки X та Z по черзі. Якщо двигуни рухаються — проводка/драйвер ОК, постав JOG_ALWAYS_RUN_TEST 0. */
@@ -181,13 +182,11 @@ void jog_process(void)
         if (alt) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
             dir_settle_delay();
-            for (int i = 0; i < repeat; i++)
-                pulse_z_step();
+            pulse_z_step();
         } else {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
             dir_settle_delay();
-            for (int i = 0; i < repeat; i++)
-                pulse_x_step();
+            pulse_x_step();
         }
         alt = 1 - alt;
         return;
@@ -199,29 +198,25 @@ void jog_process(void)
     if (joy_up()) {
         HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
         dir_settle_delay();
-        for (int i = 0; i < repeat; i++)
-            pulse_z_step();
+        pulse_z_step();
         return;
     }
     if (joy_down()) {
         HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
         dir_settle_delay();
-        for (int i = 0; i < repeat; i++)
-            pulse_z_step();
+        pulse_z_step();
         return;
     }
     if (joy_left()) {
         HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
         dir_settle_delay();
-        for (int i = 0; i < repeat; i++)
-            pulse_x_step();
+        pulse_x_step();
         return;
     }
     if (joy_right()) {
         HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
         dir_settle_delay();
-        for (int i = 0; i < repeat; i++)
-            pulse_x_step();
+        pulse_x_step();
         return;
     }
 #else
@@ -241,22 +236,18 @@ void jog_process(void)
     if (axis_mode == 0) {
         if (up) {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
-            for (int i = 0; i < repeat; i++)
-                pulse_x_step();
+            pulse_x_step();
         } else if (down) {
             HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
-            for (int i = 0; i < repeat; i++)
-                pulse_x_step();
+            pulse_x_step();
         }
     } else {
         if (up) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
-            for (int i = 0; i < repeat; i++)
-                pulse_z_step();
+            pulse_z_step();
         } else if (down) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
-            for (int i = 0; i < repeat; i++)
-                pulse_z_step();
+            pulse_z_step();
         }
     }
 #endif
