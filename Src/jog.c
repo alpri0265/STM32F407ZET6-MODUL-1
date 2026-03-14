@@ -16,7 +16,7 @@
 #define JOG_STEP_PERIOD_MS       4u  /* мс між кроками (база) — більший діапазон для rapid */
 #define JOG_STEP_PERIOD_RAPID_MS 1u  /* мс при rapid — завжди 2–4× швидше */
 /* Feed override: ADC 0..4095 → scale 50..150%. period = base*100/scale, min 1 ms */
-#define JOG_PULSE_CYCLES    8000u  /* тривалість імпульсу ~48 µs при 168 MHz */
+#define JOG_PULSE_CYCLES    500u   /* тривалість імпульсу ~3 µs при 168 MHz (DM556: min 2.5 µs) */
 #define JOG_DIR_SETTLE      400u   /* циклів після DIR перед STEP (~2.4 µs) */
 #define SL_OSC_HYST_MM      1.0f   /* гістерезис при розвороті (мм) — уникнути вібрації */
 #define SL_OSC_MIN_RANGE_MM 2.0f   /* мін. відстань між лімітами для авто-коливань */
@@ -32,7 +32,10 @@
 #define RAPID_BTN_Pin          SCALE_0_Pin
 #define RAPID_BTN_ACTIVE_LOW   1
 
+static volatile uint32_t s_isr_tick;   /* +1 кожні 1 ms від TIM6 — рівномірний таймінг */
 static uint32_t s_last_step_tick;
+static volatile uint8_t s_manual_mode; /* 1 = ручна подача (ISR крокує), 0 = Feed Auto (jog_process) */
+static volatile uint8_t s_limit_block; /* 0x1=-X 0x2=+X 0x4=-Z 0x8=+Z — блокування руху */
 static uint32_t s_step_count_x;
 static uint32_t s_step_count_z;
 /* Підписані позиції в кроках для програмних лімітів */
@@ -91,7 +94,9 @@ static void pulse_z_step(int dir)
 
 void jog_init(void)
 {
+    s_isr_tick = 0u;
     s_last_step_tick = 0u;
+    s_manual_mode = 1u;
     s_pos_x_steps = 0;
     s_pos_z_steps = 0;
     /* STEP (PUL) — переводимо з AF TIM1/TIM4 у звичайний вихід GPIO */
@@ -173,19 +178,20 @@ void jog_set_feed_override(uint16_t raw)
     s_feed_override_cached = raw;
 }
 
-/* Мінімальний крок від джойстика — БЕЗ меню, без sl_limits. Викликати з TIM6. */
+/* Генерація кроків з TIM6 — без жодної залежності від меню. */
 void jog_tick_from_isr(void)
 {
-    uint32_t now = HAL_GetTick();
+    s_isr_tick++;
+
     uint32_t base_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
     uint16_t feed_raw = s_feed_override_cached;
     uint32_t scale = 30u + ((uint32_t)feed_raw * 120u) / 4095u;
     if (scale < 10u) scale = 10u;
     uint32_t period_ms = (base_ms * 100u) / scale;
     if (period_ms < 1u) period_ms = 1u;
-    if ((now - s_last_step_tick) < period_ms)
+    if ((s_isr_tick - s_last_step_tick) < period_ms)
         return;
-    s_last_step_tick = now;
+    s_last_step_tick = s_isr_tick;
 
     if (joy_up()) {
         HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
@@ -244,25 +250,16 @@ void jog_tick_from_isr(void) { (void)0; }  /* заглушка: джойстик
 
 void jog_process(void)
 {
-    /* Джойстик працює завжди; scr лише для Feed Auto vs ручний режим. */
+    s_manual_mode = 1u;   /* за замовч. джойстик працює; 0 лише для Feed Auto */
     menu_screen_id_t scr = menu_current_screen();
-    uint32_t now = HAL_GetTick();
-    uint32_t base_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
-    uint16_t feed_raw = s_feed_override_cached;  /* оновлюється з main loop, не з ISR */
-    /* Feed 0..4095 → scale 30..150%, period = base*100/scale, min 1 */
-    uint32_t scale = 30u + ((uint32_t)feed_raw * 120u) / 4095u;
-    if (scale < 10u) scale = 10u;
-    uint32_t period_ms = (base_ms * 100u) / scale;
-    if (period_ms < 1u) period_ms = 1u;
-
-    if ((now - s_last_step_tick) < period_ms)
-        return;
-
-    s_last_step_tick = now;
 
 #if JOG_ALWAYS_RUN_TEST
-    /* Тест без джойстика: постійно кроки X та Z по черзі. Якщо двигуни рухаються — проводка/драйвер ОК, постав JOG_ALWAYS_RUN_TEST 0. */
     {
+        uint32_t now = s_isr_tick;
+        uint32_t period_ms = JOG_STEP_PERIOD_MS;
+        if ((now - s_last_step_tick) < period_ms)
+            return;
+        s_last_step_tick = now;
         static int alt;
         if (alt) {
             HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
@@ -280,8 +277,19 @@ void jog_process(void)
 
 #if JOG_USE_JOYSTICK
     if (scr == SCREEN_FEED_AUTO) {
-        /* Feed Auto: нейтраль = стіп. Джойстик натиснуто + ліміти навчені = авто-коливання.
-           Джойстик натиснуто + ліміти НЕ навчені = ручний рух (навчання). */
+        s_manual_mode = 0u;
+        /* Feed Auto: нейтраль = стіп. Джойстик натиснуто + ліміти навчені = авто-коливання. */
+        uint32_t now = s_isr_tick;
+        uint32_t base_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
+        uint16_t feed_raw = s_feed_override_cached;
+        uint32_t scale = 30u + ((uint32_t)feed_raw * 120u) / 4095u;
+        if (scale < 10u) scale = 10u;
+        uint32_t period_ms = (base_ms * 100u) / scale;
+        if (period_ms < 1u) period_ms = 1u;
+        if ((now - s_last_step_tick) < period_ms)
+            return;
+        s_last_step_tick = now;
+
         float xm, zm;
         jog_get_pos_mm(&xm, &zm);
         static int x_dir = 1, z_dir = 1;
@@ -365,58 +373,27 @@ void jog_process(void)
         }
     }
 
-    /* Jog: ручний рух з блокуванням за межами лімітів */
+    /* Jog/Feed/Feed Manual: ISR крокує. Тут лише оновлюємо блокування лімітів. */
+    s_manual_mode = 1u;
     {
         float xm, zm;
         jog_get_pos_mm(&xm, &zm);
-        if (joy_up()) {
-            if (sl_limits_z_taught()) {
-                float hi = sl_limits_get_z_max();
-                float lo = sl_limits_get_z_min();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if (zm >= hi - 0.2f) return;
-            }
-            HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
-            dir_settle_delay();
-            pulse_z_step(1);
-            return;
+        uint8_t block = 0u;
+        if (sl_limits_x_taught()) {
+            float hi = sl_limits_get_x_max();
+            float lo = sl_limits_get_x_min();
+            if (lo > hi) { float t = lo; lo = hi; hi = t; }
+            if (xm <= lo + 0.2f) block |= 0x1u;  /* -X */
+            if (xm >= hi - 0.2f) block |= 0x2u;  /* +X */
         }
-        if (joy_down()) {
-            if (sl_limits_z_taught()) {
-                float hi = sl_limits_get_z_max();
-                float lo = sl_limits_get_z_min();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if (zm <= lo + 0.2f) return;
-            }
-            HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
-            dir_settle_delay();
-            pulse_z_step(-1);
-            return;
+        if (sl_limits_z_taught()) {
+            float hi = sl_limits_get_z_max();
+            float lo = sl_limits_get_z_min();
+            if (lo > hi) { float t = lo; lo = hi; hi = t; }
+            if (zm <= lo + 0.2f) block |= 0x4u;  /* -Z */
+            if (zm >= hi - 0.2f) block |= 0x8u;  /* +Z */
         }
-        if (joy_left()) {
-            if (sl_limits_x_taught()) {
-                float hi = sl_limits_get_x_max();
-                float lo = sl_limits_get_x_min();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if (xm <= lo + 0.2f) return;
-            }
-            HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
-            dir_settle_delay();
-            pulse_x_step(-1);
-            return;
-        }
-        if (joy_right()) {
-            if (sl_limits_x_taught()) {
-                float hi = sl_limits_get_x_max();
-                float lo = sl_limits_get_x_min();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if (xm >= hi - 0.2f) return;
-            }
-            HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
-            dir_settle_delay();
-            pulse_x_step(1);
-            return;
-        }
+        s_limit_block = block;
     }
 #else
     /* Режим кнопок меню: Enter перемикає вісь (X/Z), Up = +, Down = −. PB12=Up, PB13=Down, PB14=Enter */
