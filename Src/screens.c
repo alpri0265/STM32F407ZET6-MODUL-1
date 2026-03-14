@@ -57,17 +57,18 @@ static void render_info_jog(void)
 {
     float x_mm = axis_feedback_pos_mm(AXIS_X);
     float z_mm = axis_feedback_pos_mm(AXIS_Z);
-    unsigned int ju, jd, jl, jr;
+    unsigned int ju, jd, jl, jr, rapid;
     uint32_t steps_x, steps_z;
     jog_get_joy_state(&ju, &jd, &jl, &jr);
     jog_get_step_counts(&steps_x, &steps_z);
+    jog_get_rapid_state(&rapid);
     char buf[LINE_LEN + 2];
     lcd_print_line(0, "Jog - joystick     ");
     (void)snprintf(buf, sizeof(buf), "X: %.2f  StX:%lu   ", (double)x_mm, (unsigned long)steps_x);
     lcd_print_line(1, buf);
     (void)snprintf(buf, sizeof(buf), "Z: %.2f  StZ:%lu   ", (double)z_mm, (unsigned long)steps_z);
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "U:%u D:%u L:%u R:%u Up=Back", ju, jd, jl, jr);
+    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u Up=Back", ju, jd, jl, jr, rapid);  /* * = Rapid */
     lcd_print_line(3, buf);
 }
 

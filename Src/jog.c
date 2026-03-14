@@ -14,11 +14,11 @@
 #define JOG_DIR_SETTLE      400u   /* циклів після встановлення DIR перед STEP (~2.4 µs) */
 
 /* 1 = імпульс кроку активний по LOW (idle HIGH, pulse LOW); 0 = активний по HIGH */
-#define STEP_PULSE_ACTIVE_LOW  1
-/* 1 = ENA по HIGH увімкнено; 0 = ENA по LOW увімкнено (типово для DM556) */
-#define ENA_ACTIVE_HIGH        0
-/* 1 = на екрані Jog постійно кроки X/Z без джойстика (тест проводки/драйвера). Потім поставити 0. */
-#define JOG_ALWAYS_RUN_TEST    1
+#define STEP_PULSE_ACTIVE_LOW  0
+/* 1 = ENA по HIGH увімкнено; 0 = ENA по LOW увімкнено */
+#define ENA_ACTIVE_HIGH        1
+/* 1 = постійні кроки X/Z без джойстика (тест); 0 = рух тільки від джойстика */
+#define JOG_ALWAYS_RUN_TEST    0
 /* Кнопка пришвидшеної подачі: використовуємо SCALE_0 (PC0). Натиснуто = LOW (на землю). */
 #define RAPID_BTN_GPIO_Port    SCALE_0_GPIO_Port
 #define RAPID_BTN_Pin          SCALE_0_Pin
@@ -138,6 +138,11 @@ void jog_get_step_counts(uint32_t *x, uint32_t *z)
     if (x) *x = s_step_count_x;
     if (z) *z = s_step_count_z;
 }
+
+void jog_get_rapid_state(unsigned int *rapid)
+{
+    if (rapid) *rapid = rapid_pressed() ? 1u : 0u;
+}
 #else
 void jog_get_joy_state(unsigned int *up, unsigned int *down, unsigned int *left, unsigned int *right)
 {
@@ -151,6 +156,10 @@ void jog_get_step_counts(uint32_t *x, uint32_t *z)
     if (x) *x = s_step_count_x;
     if (z) *z = s_step_count_z;
 }
+void jog_get_rapid_state(unsigned int *rapid)
+{
+    if (rapid) *rapid = 0u;
+}
 #endif
 
 void jog_process(void)
@@ -162,8 +171,8 @@ void jog_process(void)
         return;
 
     s_last_step_tick = now;
-    /* Rapid: при натиснутій кнопці робимо декілька кроків за одне опитування (~3× швидше). */
-    int repeat = rapid_pressed() ? 3 : 1;
+    /* Rapid: при натиснутій кнопці — 4× більше кроків за тик (~4× швидше). */
+    int repeat = rapid_pressed() ? 4 : 1;
 
 #if JOG_ALWAYS_RUN_TEST
     /* Тест без джойстика: постійно кроки X та Z по черзі. Якщо двигуни рухаються — проводка/драйвер ОК, постав JOG_ALWAYS_RUN_TEST 0. */
