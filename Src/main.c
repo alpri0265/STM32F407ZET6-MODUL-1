@@ -313,7 +313,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pin = SCALE_0_Pin|SCA_Pin|SL_X_NEG_BIT_Pin|SL_X_POS_BIT_Pin
                           |SL_Z_NEG_BIT_Pin|SL_Z_POS_BIT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;  /* кнопки SL: натиснуто = GND, зовнішні резистори не потрібні */
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : JOY_UP_Pin JOY_DOWN_Pin JOY_LEFT_Pin JOY_RIGHT_Pin */
