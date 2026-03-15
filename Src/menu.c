@@ -3,14 +3,14 @@
 
 
 static const char *main_items[]     = { "Jog", "Feed", "Settings", "Diagnostics", "Tool angle", "Info", "" };
-static const char *feed_items[]     = { "Manual feed", "Automatic feed", "< Back", "" };
+static const char *feed_items[]     = { "Manual feed", "Automatic feed", "Z passes", "X passes", "< Back", "" };
 static const char *settings_items[] = { "Axis X", "Axis Z", "Spindle", "Save & exit", "< Back", "" };
-static const char *diag_items[]     = { "I2C / LCD", "Encoders", "Limits", "ADC / Fault", "Tool angle calib", "< Back", "" };
+static const char *diag_items[]     = { "I2C / LCD", "Encoders", "Limits", "SL test", "ADC / Fault", "Tool angle calib", "< Back", "" };
 
 static menu_screen_id_t main_children[]      = { SCREEN_JOG, SCREEN_FEED, SCREEN_SETTINGS, SCREEN_DIAG, SCREEN_TOOL_ANGLE, SCREEN_INFO };
-static menu_screen_id_t feed_children[]      = { SCREEN_FEED_MANUAL, SCREEN_FEED_AUTO, SCREEN_ACTION_BACK };
+static menu_screen_id_t feed_children[]      = { SCREEN_FEED_MANUAL, SCREEN_FEED_AUTO, SCREEN_Z_PASSES, SCREEN_X_PASSES, SCREEN_ACTION_BACK };
 static menu_screen_id_t settings_children[]  = { SCREEN_AXIS_X, SCREEN_AXIS_Z, SCREEN_SPINDLE, SCREEN_ACTION_SAVE_EXIT, SCREEN_ACTION_BACK };
-static menu_screen_id_t diag_children[]       = { SCREEN_I2C_LCD, SCREEN_ENCODERS, SCREEN_LIMITS, SCREEN_ADC_FAULT, SCREEN_TOOL_ANGLE_CALIB, SCREEN_ACTION_BACK };
+static menu_screen_id_t diag_children[]       = { SCREEN_I2C_LCD, SCREEN_ENCODERS, SCREEN_LIMITS, SCREEN_SL_TEST, SCREEN_ADC_FAULT, SCREEN_TOOL_ANGLE_CALIB, SCREEN_ACTION_BACK };
 
 static menu_screen_id_t stack[MENU_STACK_MAX];
 static unsigned int stack_top;
@@ -30,13 +30,13 @@ static menu_screen_id_t list_child(menu_screen_id_t screen, unsigned int index)
             if (index < 6u) return main_children[index];
             break;
         case SCREEN_FEED:
-            if (index < 3u) return feed_children[index];
+            if (index < 5u) return feed_children[index];
             break;
         case SCREEN_SETTINGS:
             if (index < 5u) return settings_children[index];
             break;
         case SCREEN_DIAG:
-            if (index < 6u) return diag_children[index];
+            if (index < 7u) return diag_children[index];
             break;
         default:
             break;
@@ -130,6 +130,8 @@ menu_screen_type_t menu_screen_type(menu_screen_id_t id)
             return MENU_SCREEN_LIST;
         case SCREEN_TOOL_ANGLE:
         case SCREEN_TOOL_ANGLE_CALIB:
+        case SCREEN_Z_PASSES:
+        case SCREEN_X_PASSES:
         case SCREEN_INFO:
         default:
             return MENU_SCREEN_INFO;

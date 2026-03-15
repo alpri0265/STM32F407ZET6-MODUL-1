@@ -34,7 +34,7 @@
 
 static volatile uint32_t s_isr_tick;   /* +1 кожні 1 ms від TIM6 — рівномірний таймінг */
 static uint32_t s_last_step_tick;
-static volatile uint8_t s_manual_mode; /* 1 = ручна подача (ISR крокує), 0 = Feed Auto (jog_process) */
+static volatile uint8_t s_manual_mode; /* 1 = ручна подача (ISR крокує), 0 = Feed Auto (ISR крокує ліміт→ліміт) */
 static volatile uint8_t s_limit_block; /* 0x1=-X 0x2=+X 0x4=-Z 0x8=+Z — блокування руху */
 static uint32_t s_step_count_x;
 static uint32_t s_step_count_z;
@@ -42,6 +42,19 @@ static uint32_t s_step_count_z;
 static int32_t s_pos_x_steps;
 static int32_t s_pos_z_steps;
 static uint16_t s_feed_override_cached = 2048u;  /* 50% по замовчуванню, оновлюється з main loop */
+/* Кеш steps_per_mm для ISR (позиція в мм у Feed Auto) */
+static float s_steps_per_mm_x = 1.0f;
+static float s_steps_per_mm_z = 1.0f;
+static int s_feed_auto_x_dir = 1;
+static int s_feed_auto_z_dir = 1;
+/* Z: скільки проходів між лімітами (0 = без обмежень). */
+static volatile uint8_t s_z_passes_requested = 0u;
+static volatile uint16_t s_z_reversal_count = 0u;
+/* X: кількість проходів (0 = без обмежень). Крок заглиблення 0.01..0.3 mm (індекс 0..29) — після кожного повного проходу по Z вісь X зміщується на цей крок у напрямку X- (принцип токарного станка). */
+static volatile uint8_t s_x_passes_requested = 0u;
+static volatile uint16_t s_x_reversal_count = 0u;
+static volatile uint8_t s_x_step_per_pass_index = 0u;  /* 0..29 → 0.01, 0.02, ... 0.30 mm */
+static volatile int32_t s_z_pass_x_pending_steps = 0;  /* X кроків у напрямку X- після проходу Z (дренуємо по одному за тик) */
 
 static void step_pulse_delay(void)
 {
@@ -99,6 +112,12 @@ void jog_init(void)
     s_manual_mode = 1u;
     s_pos_x_steps = 0;
     s_pos_z_steps = 0;
+    {
+        const axis_cfg_t *cx = system_axis_cfg(AXIS_X);
+        const axis_cfg_t *cz = system_axis_cfg(AXIS_Z);
+        s_steps_per_mm_x = (cx->steps_per_mm > 0.0f) ? cx->steps_per_mm : 1.0f;
+        s_steps_per_mm_z = (cz->steps_per_mm > 0.0f) ? cz->steps_per_mm : 1.0f;
+    }
     /* STEP (PUL) — переводимо з AF TIM1/TIM4 у звичайний вихід GPIO */
     GPIO_InitTypeDef g = {0};
     g.Mode = GPIO_MODE_OUTPUT_PP;
@@ -178,7 +197,45 @@ void jog_set_feed_override(uint16_t raw)
     s_feed_override_cached = raw;
 }
 
-/* Генерація кроків з TIM6 — без жодної залежності від меню. */
+unsigned int jog_get_z_passes(void)
+{
+    return (unsigned int)s_z_passes_requested;
+}
+
+void jog_set_z_passes(unsigned int n)
+{
+    s_z_passes_requested = (n > 99u) ? 99u : (uint8_t)n;
+}
+
+unsigned int jog_get_x_passes(void)
+{
+    return (unsigned int)s_x_passes_requested;
+}
+
+void jog_set_x_passes(unsigned int n)
+{
+    s_x_passes_requested = (n > 99u) ? 99u : (uint8_t)n;
+}
+
+/* Індекс кроку 0..29 → 0.01, 0.02, ... 0.30 mm */
+unsigned int jog_get_x_step_index(void)
+{
+    return (unsigned int)s_x_step_per_pass_index;
+}
+
+void jog_set_x_step_index(unsigned int i)
+{
+    s_x_step_per_pass_index = (i > 29u) ? 29u : (uint8_t)i;
+}
+
+/* Крок заглиблення X в мм за індексом 0..29 (0.01 .. 0.30) */
+static float x_step_mm_from_index(unsigned int i)
+{
+    if (i > 29u) i = 29u;
+    return 0.01f * (float)(i + 1u);
+}
+
+/* Генерація кроків з TIM6. При s_manual_mode==0 (Feed Auto) тут же робимо кроки ліміт→ліміт. */
 void jog_tick_from_isr(void)
 {
     s_isr_tick++;
@@ -191,8 +248,222 @@ void jog_tick_from_isr(void)
     if (period_ms < 1u) period_ms = 1u;
     if ((s_isr_tick - s_last_step_tick) < period_ms)
         return;
-    s_last_step_tick = s_isr_tick;
 
+    if (s_manual_mode == 0u) {
+        /* Дренування X-кроків (заглиблення X-) після проходу Z — один крок за тик */
+        if (s_z_pass_x_pending_steps > 0) {
+            s_last_step_tick = s_isr_tick;
+            HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);  /* X- */
+            dir_settle_delay();
+            pulse_x_step(-1);
+            s_z_pass_x_pending_steps--;
+            return;
+        }
+
+        float xm = (float)s_pos_x_steps / s_steps_per_mm_x;
+        float zm = (float)s_pos_z_steps / s_steps_per_mm_z;
+
+        if (joy_up()) {
+            if (sl_limits_z_taught()) {
+                float lo = sl_limits_get_z_min();
+                float hi = sl_limits_get_z_max();
+                if (lo > hi) { float t = lo; lo = hi; hi = t; }
+                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) {
+                    s_last_step_tick = s_isr_tick;
+                    return;
+                }
+                if (s_z_passes_requested != 0u && s_z_reversal_count >= 2u * (uint16_t)s_z_passes_requested) {
+                    s_last_step_tick = s_isr_tick;
+                    return;  /* задана кількість проходів Z виконана */
+                }
+                {
+                    int old_z = s_feed_auto_z_dir;
+                    if (zm >= hi - SL_OSC_HYST_MM) s_feed_auto_z_dir = -1;
+                    else if (zm <= lo + SL_OSC_HYST_MM) s_feed_auto_z_dir = 1;
+                    if (s_feed_auto_z_dir != old_z) {
+                        s_z_reversal_count++;
+                        /* Після кожного повного проходу Z (туди-назад) — заглиблення по X на крок (X-) */
+                        if (s_z_reversal_count >= 2u && (s_z_reversal_count & 1u) == 0u) {
+                            float step_mm = x_step_mm_from_index(s_x_step_per_pass_index);
+                            int32_t x_steps = (int32_t)(step_mm * s_steps_per_mm_x + 0.5f);
+                            if (x_steps > 0) s_z_pass_x_pending_steps += x_steps;
+                        }
+                    }
+                    s_last_step_tick = s_isr_tick;
+                    HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, s_feed_auto_z_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                    dir_settle_delay();
+                    pulse_z_step(s_feed_auto_z_dir);
+                }
+            } else {
+                s_last_step_tick = s_isr_tick;
+                HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
+                dir_settle_delay();
+                pulse_z_step(1);
+            }
+            return;
+        }
+        if (joy_down()) {
+            if (sl_limits_z_taught()) {
+                float lo = sl_limits_get_z_min();
+                float hi = sl_limits_get_z_max();
+                if (lo > hi) { float t = lo; lo = hi; hi = t; }
+                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) {
+                    s_last_step_tick = s_isr_tick;
+                    return;
+                }
+                if (s_z_passes_requested != 0u && s_z_reversal_count >= 2u * (uint16_t)s_z_passes_requested) {
+                    s_last_step_tick = s_isr_tick;
+                    return;
+                }
+                {
+                    int old_z = s_feed_auto_z_dir;
+                    if (zm >= hi - SL_OSC_HYST_MM) s_feed_auto_z_dir = -1;
+                    else if (zm <= lo + SL_OSC_HYST_MM) s_feed_auto_z_dir = 1;
+                    if (s_feed_auto_z_dir != old_z) {
+                        s_z_reversal_count++;
+                        if (s_z_reversal_count >= 2u && (s_z_reversal_count & 1u) == 0u) {
+                            float step_mm = x_step_mm_from_index(s_x_step_per_pass_index);
+                            int32_t x_steps = (int32_t)(step_mm * s_steps_per_mm_x + 0.5f);
+                            if (x_steps > 0) s_z_pass_x_pending_steps += x_steps;
+                        }
+                    }
+                    s_last_step_tick = s_isr_tick;
+                    HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, s_feed_auto_z_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                    dir_settle_delay();
+                    pulse_z_step(s_feed_auto_z_dir);
+                }
+            } else {
+                s_last_step_tick = s_isr_tick;
+                HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
+                dir_settle_delay();
+                pulse_z_step(-1);
+            }
+            return;
+        }
+        if (joy_left()) {
+            if (sl_limits_x_taught()) {
+                float lo = sl_limits_get_x_min();
+                float hi = sl_limits_get_x_max();
+                if (lo > hi) { float t = lo; lo = hi; hi = t; }
+                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) {
+                    s_last_step_tick = s_isr_tick;
+                    return;
+                }
+                if (s_x_passes_requested != 0u && s_x_reversal_count >= 2u * (uint16_t)s_x_passes_requested) {
+                    s_last_step_tick = s_isr_tick;
+                    return;
+                }
+                {
+                    int old_x = s_feed_auto_x_dir;
+                    if (xm >= hi - SL_OSC_HYST_MM) s_feed_auto_x_dir = -1;
+                    else if (xm <= lo + SL_OSC_HYST_MM) s_feed_auto_x_dir = 1;
+                    if (s_feed_auto_x_dir != old_x) s_x_reversal_count++;
+                    s_last_step_tick = s_isr_tick;
+                    HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, s_feed_auto_x_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                    dir_settle_delay();
+                    pulse_x_step(s_feed_auto_x_dir);
+                }
+            } else {
+                s_last_step_tick = s_isr_tick;
+                HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
+                dir_settle_delay();
+                pulse_x_step(-1);
+            }
+            return;
+        }
+        if (joy_right()) {
+            if (sl_limits_x_taught()) {
+                float lo = sl_limits_get_x_min();
+                float hi = sl_limits_get_x_max();
+                if (lo > hi) { float t = lo; lo = hi; hi = t; }
+                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) {
+                    s_last_step_tick = s_isr_tick;
+                    return;
+                }
+                if (s_x_passes_requested != 0u && s_x_reversal_count >= 2u * (uint16_t)s_x_passes_requested) {
+                    s_last_step_tick = s_isr_tick;
+                    return;
+                }
+                {
+                    int old_x = s_feed_auto_x_dir;
+                    if (xm >= hi - SL_OSC_HYST_MM) s_feed_auto_x_dir = -1;
+                    else if (xm <= lo + SL_OSC_HYST_MM) s_feed_auto_x_dir = 1;
+                    if (s_feed_auto_x_dir != old_x) s_x_reversal_count++;
+                    s_last_step_tick = s_isr_tick;
+                    HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, s_feed_auto_x_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                    dir_settle_delay();
+                    pulse_x_step(s_feed_auto_x_dir);
+                }
+            } else {
+                s_last_step_tick = s_isr_tick;
+                HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
+                dir_settle_delay();
+                pulse_x_step(1);
+            }
+            return;
+        }
+        /* Нейтраль: автоматична подача Z та X між лімітами. Якщо обидві осі навчені — чергуємо кроки. */
+        {
+            bool do_z = sl_limits_z_taught();
+            bool do_x = sl_limits_x_taught();
+            if (do_z && do_x)
+                do_z = ((s_isr_tick & 1u) != 0u);
+            else if (!do_z && !do_x) {
+                s_z_reversal_count = 0u;
+                s_x_reversal_count = 0u;
+                s_last_step_tick = s_isr_tick;
+                return;
+            }
+            if (do_z) {
+                float lo = sl_limits_get_z_min();
+                float hi = sl_limits_get_z_max();
+                if (lo > hi) { float t = lo; lo = hi; hi = t; }
+                if ((hi - lo) >= SL_OSC_MIN_RANGE_MM) {
+                    if (s_z_passes_requested == 0u || s_z_reversal_count < 2u * (uint16_t)s_z_passes_requested) {
+                        int old_z = s_feed_auto_z_dir;
+                        if (zm >= hi - SL_OSC_HYST_MM) s_feed_auto_z_dir = -1;
+                        else if (zm <= lo + SL_OSC_HYST_MM) s_feed_auto_z_dir = 1;
+                        if (s_feed_auto_z_dir != old_z) {
+                            s_z_reversal_count++;
+                            if (s_z_reversal_count >= 2u && (s_z_reversal_count & 1u) == 0u) {
+                                float step_mm = x_step_mm_from_index(s_x_step_per_pass_index);
+                                int32_t x_steps = (int32_t)(step_mm * s_steps_per_mm_x + 0.5f);
+                                if (x_steps > 0) s_z_pass_x_pending_steps += x_steps;
+                            }
+                        }
+                        s_last_step_tick = s_isr_tick;
+                        HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, s_feed_auto_z_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                        dir_settle_delay();
+                        pulse_z_step(s_feed_auto_z_dir);
+                        return;
+                    }
+                }
+            } else {
+                float lo = sl_limits_get_x_min();
+                float hi = sl_limits_get_x_max();
+                if (lo > hi) { float t = lo; lo = hi; hi = t; }
+                if ((hi - lo) >= SL_OSC_MIN_RANGE_MM) {
+                    if (s_x_passes_requested == 0u || s_x_reversal_count < 2u * (uint16_t)s_x_passes_requested) {
+                        int old_x = s_feed_auto_x_dir;
+                        if (xm >= hi - SL_OSC_HYST_MM) s_feed_auto_x_dir = -1;
+                        else if (xm <= lo + SL_OSC_HYST_MM) s_feed_auto_x_dir = 1;
+                        if (s_feed_auto_x_dir != old_x) s_x_reversal_count++;
+                        s_last_step_tick = s_isr_tick;
+                        HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, s_feed_auto_x_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                        dir_settle_delay();
+                        pulse_x_step(s_feed_auto_x_dir);
+                        return;
+                    }
+                }
+            }
+        }
+        s_z_reversal_count = 0u;
+        s_x_reversal_count = 0u;
+        s_last_step_tick = s_isr_tick;
+        return;
+    }
+
+    s_last_step_tick = s_isr_tick;
     if (joy_up()) {
         HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
         dir_settle_delay();
@@ -277,100 +548,8 @@ void jog_process(void)
 
 #if JOG_USE_JOYSTICK
     if (scr == SCREEN_FEED_AUTO) {
-        s_manual_mode = 0u;
-        /* Feed Auto: нейтраль = стіп. Джойстик натиснуто + ліміти навчені = авто-коливання. */
-        uint32_t now = s_isr_tick;
-        uint32_t base_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
-        uint16_t feed_raw = s_feed_override_cached;
-        uint32_t scale = 30u + ((uint32_t)feed_raw * 120u) / 4095u;
-        if (scale < 10u) scale = 10u;
-        uint32_t period_ms = (base_ms * 100u) / scale;
-        if (period_ms < 1u) period_ms = 1u;
-        if ((now - s_last_step_tick) < period_ms)
-            return;
-        s_last_step_tick = now;
-
-        float xm, zm;
-        jog_get_pos_mm(&xm, &zm);
-        static int x_dir = 1, z_dir = 1;
-
-        if (!joy_up() && !joy_down() && !joy_left() && !joy_right()) {
-            return;  /* Нейтраль — зупинка */
-        }
-
-        /* Джойстик натиснуто */
-        if (joy_up()) {
-            if (sl_limits_z_taught()) {
-                float lo = sl_limits_get_z_min();
-                float hi = sl_limits_get_z_max();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) return; /* занадто близькі ліміти — не коливати */
-                if (zm >= hi - SL_OSC_HYST_MM) z_dir = -1;
-                else if (zm <= lo + SL_OSC_HYST_MM) z_dir = 1;
-                HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, z_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-                dir_settle_delay();
-                pulse_z_step(z_dir);
-            } else {
-                HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_SET);
-                dir_settle_delay();
-                pulse_z_step(1);
-            }
-            return;
-        }
-        if (joy_down()) {
-            if (sl_limits_z_taught()) {
-                float lo = sl_limits_get_z_min();
-                float hi = sl_limits_get_z_max();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) return;
-                if (zm >= hi - SL_OSC_HYST_MM) z_dir = -1;
-                else if (zm <= lo + SL_OSC_HYST_MM) z_dir = 1;
-                HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, z_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-                dir_settle_delay();
-                pulse_z_step(z_dir);
-            } else {
-                HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, GPIO_PIN_RESET);
-                dir_settle_delay();
-                pulse_z_step(-1);
-            }
-            return;
-        }
-        if (joy_left()) {
-            if (sl_limits_x_taught()) {
-                float lo = sl_limits_get_x_min();
-                float hi = sl_limits_get_x_max();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) return;
-                if (xm >= hi - SL_OSC_HYST_MM) x_dir = -1;
-                else if (xm <= lo + SL_OSC_HYST_MM) x_dir = 1;
-                HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, x_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-                dir_settle_delay();
-                pulse_x_step(x_dir);
-            } else {
-                HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_RESET);
-                dir_settle_delay();
-                pulse_x_step(-1);
-            }
-            return;
-        }
-        if (joy_right()) {
-            if (sl_limits_x_taught()) {
-                float lo = sl_limits_get_x_min();
-                float hi = sl_limits_get_x_max();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if ((hi - lo) < SL_OSC_MIN_RANGE_MM) return;
-                if (xm >= hi - SL_OSC_HYST_MM) x_dir = -1;
-                else if (xm <= lo + SL_OSC_HYST_MM) x_dir = 1;
-                HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, x_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-                dir_settle_delay();
-                pulse_x_step(x_dir);
-            } else {
-                HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, GPIO_PIN_SET);
-                dir_settle_delay();
-                pulse_x_step(1);
-            }
-            return;
-        }
+        s_manual_mode = 0u;  /* кроки ліміт→ліміт робить TIM6 ISR */
+        return;
     }
 
     /* Jog/Feed/Feed Manual: ISR крокує. Тут лише оновлюємо блокування лімітів. */

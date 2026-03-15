@@ -49,11 +49,11 @@ void app_loop(void)
         uint16_t f = adc_if_read(ADC_CH_FEED_OVERRIDE);
         jog_set_feed_override(f);
     }
-    if (menu_current_screen() == SCREEN_FEED_AUTO || menu_current_screen() == SCREEN_JOG
-        || menu_current_screen() == SCREEN_FEED) {
+    {
         float xm, zm;
         jog_get_pos_mm(&xm, &zm);
-        sl_limits_process(xm, zm);
+        sl_limits_set_test_mode(menu_current_screen() == SCREEN_SL_TEST);
+        sl_limits_process(xm, zm);  /* кнопки SL (навчання) + LED — на всіх екранах */
     }
     jog_process();
 #endif

@@ -26,9 +26,12 @@ float sl_limits_get_x_max(void);
 float sl_limits_get_z_min(void);
 float sl_limits_get_z_max(void);
 
-/* Чи обидва ліміти осі навчені */
+/* Чи обидва ліміти осі навчені (false також коли ліміти вимкнені кнопкою). */
 bool sl_limits_x_taught(void);
 bool sl_limits_z_taught(void);
+
+/* Чи ліміти увімкнені (ручне вимкнення: довге натискання X-). */
+bool sl_limits_enabled(void);
 
 /* Перевірка: чи pos в межах. Якщо не навчено - завжди true. */
 bool sl_limits_in_range_x(float pos_mm);
@@ -41,5 +44,8 @@ void sl_limits_reset(void);
 
 /* Обробка кнопок (навчання) та оновлення LED. Викликати з app з x_mm, z_mm. */
 void sl_limits_process(float x_mm, float z_mm);
+
+/* Режим тесту: LED повторюють стан кнопок (натиснуто = світить). Викликати true на екрані тесту. */
+void sl_limits_set_test_mode(bool on);
 
 #endif

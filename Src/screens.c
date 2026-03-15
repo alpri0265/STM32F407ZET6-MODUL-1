@@ -106,6 +106,42 @@ static void render_info_feed_auto(void)
     lcd_print_line(3, "SL btn=teach [Back]");
 }
 
+static void render_info_z_passes(void)
+{
+    unsigned int n = jog_get_z_passes();
+    char buf[LINE_LEN + 2];
+    lcd_print_line(0, "Z: passes (axis Z) ");
+    (void)snprintf(buf, sizeof(buf), "Passes: %u         ", n);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(1, buf);
+    lcd_print_line(2, "0=unlimited        ");
+    lcd_print_line(3, "Dn+ Up- [Ent]=Back ");
+}
+
+/* Фокус на екрані X passes: 0 = Passes, 1 = X- depth */
+static unsigned int s_x_passes_focus = 1u;
+static menu_screen_id_t s_prev_menu_screen = (menu_screen_id_t)-1;
+
+/* X: проходів по X (ліміт) та глибина X- (0.01..0.30 mm) після кожного проходу Z.
+ * Значення виводимо цілими (0.%02u), щоб не залежати від _printf_float. */
+static void render_info_x_passes(void)
+{
+    unsigned int passes = jog_get_x_passes();
+    unsigned int step_i = jog_get_x_step_index();
+    unsigned int step_val = step_i + 1u;  /* 1..30 → 0.01..0.30 */
+    char buf[LINE_LEN + 2];
+    const char *cur0 = (s_x_passes_focus == 0u) ? ">" : " ";
+    const char *cur1 = (s_x_passes_focus == 1u) ? ">" : " ";
+    lcd_print_line(0, "X passes & depth  ");
+    (void)snprintf(buf, sizeof(buf), "%sPasses: %u        ", cur0, passes);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(1, buf);
+    (void)snprintf(buf, sizeof(buf), "%s X- 0.%02u mm     ", cur1, step_val);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(2, buf);
+    lcd_print_line(3, "Dn+ Up- [Ent]=row");
+}
+
 static void render_info_axis_x(void)
 {
     const axis_cfg_t *c = system_axis_cfg(AXIS_X);
@@ -156,6 +192,22 @@ static void render_info_limits(void)
         limits_read_z_neg() ? 1 : 0, limits_read_z_pos() ? 1 : 0);
     lcd_print_line(2, buf);
     lcd_print_line(3, "[Back]             ");
+}
+
+/* Тест кнопок та LED програмних лімітів (SL). На екрані — стан кнопок; LED світяться при натисканні. */
+static void render_info_sl_test(void)
+{
+    unsigned int xn = sl_limits_btn_x_neg() ? 1u : 0u;
+    unsigned int xp = sl_limits_btn_x_pos() ? 1u : 0u;
+    unsigned int zn = sl_limits_btn_z_neg() ? 1u : 0u;
+    unsigned int zp = sl_limits_btn_z_pos() ? 1u : 0u;
+    char buf[LINE_LEN + 2];
+    lcd_print_line(0, "SL buttons & LEDs   ");
+    lcd_print_line(1, "X-   X+   Z-   Z+  ");
+    (void)snprintf(buf, sizeof(buf), " %u    %u    %u    %u   ", xn, xp, zn, zp);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(2, buf);
+    lcd_print_line(3, "Press=LED on [Back]");
 }
 
 static void render_info_i2c_lcd(void)
@@ -291,12 +343,15 @@ static void render_info_screen(menu_screen_id_t id)
         case SCREEN_JOG:       render_info_jog();       break;
         case SCREEN_FEED_MANUAL: render_info_feed_manual(); break;
         case SCREEN_FEED_AUTO:   render_info_feed_auto();   break;
+        case SCREEN_Z_PASSES:   render_info_z_passes();    break;
+        case SCREEN_X_PASSES:   render_info_x_passes();    break;
         case SCREEN_AXIS_X:    render_info_axis_x();    break;
         case SCREEN_AXIS_Z:    render_info_axis_z();    break;
         case SCREEN_SPINDLE:   render_info_spindle();   break;
         case SCREEN_I2C_LCD:   render_info_i2c_lcd();   break;
         case SCREEN_ENCODERS:  render_info_encoders();  break;
         case SCREEN_LIMITS:    render_info_limits();    break;
+        case SCREEN_SL_TEST:   render_info_sl_test();   break;
         case SCREEN_ADC_FAULT: render_info_adc_fault();  break;
         case SCREEN_TOOL_ANGLE:     render_info_tool_angle();     break;
         case SCREEN_TOOL_ANGLE_CALIB: render_info_tool_angle_calib(); break;
@@ -335,6 +390,9 @@ void screens_process(void)
         bool need_render = false;
         menu_screen_id_t cur = menu_current_screen();
         menu_screen_type_t st = menu_screen_type(cur);
+
+        if (cur == SCREEN_X_PASSES && s_prev_menu_screen != SCREEN_X_PASSES)
+            s_x_passes_focus = 1u;
 
         if (cur != SCREEN_TOOL_ANGLE)
             tool_angle_edit_mode = false;
@@ -391,7 +449,51 @@ void screens_process(void)
                     menu_back();
                     need_render = true;
                 }
-            } else if ((cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO) && menu_can_back()) {
+            } else if (cur == SCREEN_Z_PASSES && menu_can_back()) {
+                unsigned int v = jog_get_z_passes();
+                if (act == ENCODER_MENU_ACTION_ENTER) {
+                    menu_back();
+                    need_render = true;
+                } else if (act == ENCODER_MENU_ACTION_CCW) {
+                    if (v == 0u)
+                        menu_back();
+                    else
+                        jog_set_z_passes(v - 1u);
+                    need_render = true;
+                } else if (act == ENCODER_MENU_ACTION_CW) {
+                    jog_set_z_passes(v < 99u ? v + 1u : 99u);
+                    need_render = true;
+                }
+            } else if (cur == SCREEN_X_PASSES && menu_can_back()) {
+                unsigned int passes = jog_get_x_passes();
+                unsigned int step_i = jog_get_x_step_index();
+                if (act == ENCODER_MENU_ACTION_ENTER) {
+                    if (s_x_passes_focus == 0u) {
+                        s_x_passes_focus = 1u;
+                    } else {
+                        s_x_passes_focus = 0u;
+                        menu_back();
+                    }
+                    need_render = true;
+                } else if (act == ENCODER_MENU_ACTION_CCW) {
+                    if (s_x_passes_focus == 0u) {
+                        if (passes == 0u)
+                            menu_back();
+                        else
+                            jog_set_x_passes(passes - 1u);
+                    } else {
+                        if (step_i > 0u) jog_set_x_step_index(step_i - 1u);
+                    }
+                    need_render = true;
+                } else if (act == ENCODER_MENU_ACTION_CW) {
+                    if (s_x_passes_focus == 0u) {
+                        jog_set_x_passes(passes < 99u ? passes + 1u : 99u);
+                    } else {
+                        jog_set_x_step_index(step_i < 29u ? step_i + 1u : 29u);
+                    }
+                    need_render = true;
+                }
+            } else if ((cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO || cur == SCREEN_SL_TEST) && menu_can_back()) {
                 if (act == ENCODER_MENU_ACTION_CCW) {
                     menu_back();
                     need_render = true;
@@ -433,7 +535,7 @@ void screens_process(void)
                 if (need_render)
                     last_adc_tick = now;
             }
-            if (cur == SCREEN_LIMITS) {
+            if (cur == SCREEN_LIMITS || cur == SCREEN_SL_TEST) {
                 if ((now - last_limits_tick) >= 150u)
                     need_render = true;
                 if (need_render)
@@ -454,6 +556,7 @@ void screens_process(void)
         }
         if (need_render)
             render_current_screen();
+        s_prev_menu_screen = cur;
         /* Кут інструменту: тільки рядок з числом оновлювати раз на 100 мс (не в режимі Set) */
         if (cur == SCREEN_TOOL_ANGLE && !tool_angle_edit_mode) {
             static uint32_t last_tool_tick;

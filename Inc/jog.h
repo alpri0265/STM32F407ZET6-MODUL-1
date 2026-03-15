@@ -16,4 +16,12 @@ void jog_get_rapid_state(unsigned int *rapid);
 void jog_get_pos_mm(float *x_mm, float *z_mm);
 /* Встановити кеш feed override (raw 0..4095). */
 void jog_set_feed_override(uint16_t raw);
+/* Кількість проходів Z у Feed Auto (0 = без обмежень). */
+unsigned int jog_get_z_passes(void);
+void jog_set_z_passes(unsigned int n);
+/* X: кількість проходів по X (0 = без обмежень). Глибина X- за індексом 0..29 (0.01..0.30 mm) — після кожного повного проходу по Z вісь X зміщується на цей крок у напрямку X- (принцип токарного станка). */
+unsigned int jog_get_x_passes(void);
+void jog_set_x_passes(unsigned int n);
+unsigned int jog_get_x_step_index(void);
+void jog_set_x_step_index(unsigned int i);
 #endif

@@ -1,9 +1,16 @@
 #include "sl_limits.h"
+#include "bringup_config.h"
 #include "main.h"
 #include <float.h>
 
+#ifndef SL_LIMITS_ENABLED
+#define SL_LIMITS_ENABLED 1
+#endif
+
 #define SL_BTN_ACTIVE_LOW  1  /* натиснуто = LOW */
 #define SL_AT_LIMIT_EPS_MM 0.15f
+/* Не використовується: усі LED однаково — світяться при HIGH (анод через R на пін, катод на GND). */
+#define SL_NEG_LED_ACTIVE_LOW  0
 
 static float s_x_min = 0.0f;
 static float s_x_max = 0.0f;
@@ -13,6 +20,15 @@ static bool s_x_min_taught = false;
 static bool s_x_max_taught = false;
 static bool s_z_min_taught = false;
 static bool s_z_max_taught = false;
+static bool s_test_mode = false;
+static bool s_limits_enabled = true;
+/* Коротке натискання (< SL_LONG_PRESS_MS) = установка ліміта; довге (≥ SL_LONG_PRESS_MS) = зняття. */
+#define SL_LONG_PRESS_MS  600u
+
+void sl_limits_set_test_mode(bool on)
+{
+    s_test_mode = on;
+}
 
 static bool btn_read(GPIO_TypeDef *port, uint16_t pin)
 {
@@ -76,8 +92,10 @@ float sl_limits_get_x_max(void) { return s_x_max; }
 float sl_limits_get_z_min(void) { return s_z_min; }
 float sl_limits_get_z_max(void) { return s_z_max; }
 
-bool sl_limits_x_taught(void) { return s_x_min_taught && s_x_max_taught; }
-bool sl_limits_z_taught(void) { return s_z_min_taught && s_z_max_taught; }
+bool sl_limits_enabled(void) { return s_limits_enabled; }
+
+bool sl_limits_x_taught(void) { return (SL_LIMITS_ENABLED != 0) && s_limits_enabled && s_x_min_taught && s_x_max_taught; }
+bool sl_limits_z_taught(void) { return (SL_LIMITS_ENABLED != 0) && s_limits_enabled && s_z_min_taught && s_z_max_taught; }
 
 bool sl_limits_in_range_x(float pos_mm)
 {
@@ -99,7 +117,17 @@ void sl_limits_update_leds(float x_mm, float z_mm)
 {
     (void)x_mm;
     (void)z_mm;
-    /* LED світяться, коли відповідний ліміт навчено встановлений */
+    if (s_test_mode) {
+        /* Режим тесту: натиснуто = LED світить (усі 4 однаково: HIGH = світить) */
+        bool xn = sl_limits_btn_x_neg(), xp = sl_limits_btn_x_pos();
+        bool zn = sl_limits_btn_z_neg(), zp = sl_limits_btn_z_pos();
+        led_write(SL_X_NEG_LED_GPIO_Port, SL_X_NEG_LED_Pin, xn);
+        led_write(SL_X_POS_LED_GPIO_Port, SL_X_POS_LED_Pin, xp);
+        led_write(SL_Z_NEG_LED_GPIO_Port, SL_Z_NEG_LED_Pin, zn);
+        led_write(SL_Z_POS_LED_GPIO_Port, SL_Z_POS_LED_Pin, zp);
+        return;
+    }
+    /* LED світяться при HIGH, коли відповідний ліміт навчено (усі 4 однаково) */
     led_write(SL_X_NEG_LED_GPIO_Port, SL_X_NEG_LED_Pin, s_x_min_taught);
     led_write(SL_X_POS_LED_GPIO_Port, SL_X_POS_LED_Pin, s_x_max_taught);
     led_write(SL_Z_NEG_LED_GPIO_Port, SL_Z_NEG_LED_Pin, s_z_min_taught);
@@ -111,20 +139,65 @@ void sl_limits_reset(void)
     sl_limits_init();
 }
 
-/* Обробка в режимі Feed Auto: натискання кнопок = навчання, оновлення LED.
-   Викликати з app з поточними x_mm, z_mm. */
+/* Коротке натискання = установка ліміта (поточна позиція). Довге натискання (≥ SL_LONG_PRESS_MS) = зняття ліміта. */
 void sl_limits_process(float x_mm, float z_mm)
 {
     static bool last_xn, last_xp, last_zn, last_zp;
+    static uint32_t press_start_xn, press_start_xp, press_start_zn, press_start_zp;  /* 0 = не натиснуто */
+    uint32_t now = HAL_GetTick();
     bool xn = sl_limits_btn_x_neg();
     bool xp = sl_limits_btn_x_pos();
     bool zn = sl_limits_btn_z_neg();
     bool zp = sl_limits_btn_z_pos();
 
-    if (xn && !last_xn) sl_limits_teach_x_neg(x_mm);
-    if (xp && !last_xp) sl_limits_teach_x_pos(x_mm);
-    if (zn && !last_zn) sl_limits_teach_z_neg(z_mm);
-    if (zp && !last_zp) sl_limits_teach_z_pos(z_mm);
+    /* X-: при відпусканні — коротке = навчити, довге = зняти */
+    if (xn)
+        press_start_xn = (press_start_xn != 0u) ? press_start_xn : now;
+    else if (last_xn && press_start_xn != 0u) {
+        uint32_t dur = (now - press_start_xn);
+        if (dur >= SL_LONG_PRESS_MS)
+            s_x_min_taught = false;
+        else
+            sl_limits_teach_x_neg(x_mm);
+        press_start_xn = 0u;
+    }
+    if (!xn) press_start_xn = 0u;
+
+    if (xp)
+        press_start_xp = (press_start_xp != 0u) ? press_start_xp : now;
+    else if (last_xp && press_start_xp != 0u) {
+        uint32_t dur = (now - press_start_xp);
+        if (dur >= SL_LONG_PRESS_MS)
+            s_x_max_taught = false;
+        else
+            sl_limits_teach_x_pos(x_mm);
+        press_start_xp = 0u;
+    }
+    if (!xp) press_start_xp = 0u;
+
+    if (zn)
+        press_start_zn = (press_start_zn != 0u) ? press_start_zn : now;
+    else if (last_zn && press_start_zn != 0u) {
+        uint32_t dur = (now - press_start_zn);
+        if (dur >= SL_LONG_PRESS_MS)
+            s_z_min_taught = false;
+        else
+            sl_limits_teach_z_neg(z_mm);
+        press_start_zn = 0u;
+    }
+    if (!zn) press_start_zn = 0u;
+
+    if (zp)
+        press_start_zp = (press_start_zp != 0u) ? press_start_zp : now;
+    else if (last_zp && press_start_zp != 0u) {
+        uint32_t dur = (now - press_start_zp);
+        if (dur >= SL_LONG_PRESS_MS)
+            s_z_max_taught = false;
+        else
+            sl_limits_teach_z_pos(z_mm);
+        press_start_zp = 0u;
+    }
+    if (!zp) press_start_zp = 0u;
 
     last_xn = xn;
     last_xp = xp;
