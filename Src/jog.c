@@ -1,6 +1,8 @@
 #include "jog.h"
 #include "main.h"
 #include "board.h"
+#include "manual_feed_mode.h"
+#include "enc_if.h"
 #include "adc_if.h"
 #include "bringup_config.h"
 #include "menu.h"
@@ -235,9 +237,68 @@ static float x_step_mm_from_index(unsigned int i)
     return 0.01f * (float)(i + 1u);
 }
 
+/* Ручний режим: рух від енкодера RE60 (MPG_A/B).
+ * Використовуємо фронт A (PB12) і стан B (PB13) для визначення напрямку:
+ * A: 1->0, B==1 → крок +
+ * A: 1->0, B==0 → крок -.
+ */
+static void handle_manual_encoder_mode(void)
+{
+    encoder_axis_t ax = manual_feed_get_axis();
+    if (ax == ENCODER_AXIS_NONE)
+        return;
+
+    static uint8_t last_a = 1u;
+    uint8_t a_now = (HAL_GPIO_ReadPin(MPG_A_GPIO_Port, MPG_A_Pin) == GPIO_PIN_RESET) ? 0u : 1u;
+    uint8_t b_now = (HAL_GPIO_ReadPin(MPG_B_GPIO_Port, MPG_B_Pin) == GPIO_PIN_RESET) ? 0u : 1u;
+
+    int dir_enc = 0;
+    if (last_a == 1u && a_now == 0u) {
+        /* Фронт A: напрямок залежить від поточного стану B */
+        dir_enc = (b_now ? +1 : -1);
+    }
+    last_a = a_now;
+
+    if (dir_enc == 0)
+        return;
+
+    step_scale_t sc = manual_feed_get_step_scale();
+    float scale_mm;
+    switch (sc) {
+        case STEP_SCALE_0_001: scale_mm = 0.001f; break;
+        case STEP_SCALE_0_01:  scale_mm = 0.01f;  break;
+        default:               scale_mm = 0.1f;   break;
+    }
+
+    float steps_per_mm = (ax == ENCODER_AXIS_X) ? s_steps_per_mm_x : s_steps_per_mm_z;
+    float steps_f = (float)dir_enc * scale_mm * steps_per_mm;
+    int32_t steps = (steps_f >= 0.0f) ? (int32_t)(steps_f + 0.5f) : (int32_t)(steps_f - 0.5f);
+    if (steps == 0)
+        return;
+
+    int dir = (steps >= 0) ? 1 : -1;
+    uint32_t n = (steps >= 0) ? (uint32_t)steps : (uint32_t)(-steps);
+
+    while (n--) {
+        if (ax == ENCODER_AXIS_X) {
+            HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+            dir_settle_delay();
+            pulse_x_step(dir);
+        } else {
+            HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+            dir_settle_delay();
+            pulse_z_step(dir);
+        }
+    }
+}
+
 /* Генерація кроків з TIM6. При s_manual_mode==0 (Feed Auto) тут же робимо кроки ліміт→ліміт. */
 void jog_tick_from_isr(void)
 {
+    /* У ручному режимі (MANUAL) рух від енкодера, джойстик/Feed Auto не крокують. */
+    if (manual_feed_get_mode() == FEED_MODE_MANUAL)
+        return;
+
     s_isr_tick++;
 
     uint32_t base_ms = rapid_pressed() ? JOG_STEP_PERIOD_RAPID_MS : JOG_STEP_PERIOD_MS;
@@ -402,61 +463,7 @@ void jog_tick_from_isr(void)
             }
             return;
         }
-        /* Нейтраль: автоматична подача Z та X між лімітами. Якщо обидві осі навчені — чергуємо кроки. */
-        {
-            bool do_z = sl_limits_z_taught();
-            bool do_x = sl_limits_x_taught();
-            if (do_z && do_x)
-                do_z = ((s_isr_tick & 1u) != 0u);
-            else if (!do_z && !do_x) {
-                s_z_reversal_count = 0u;
-                s_x_reversal_count = 0u;
-                s_last_step_tick = s_isr_tick;
-                return;
-            }
-            if (do_z) {
-                float lo = sl_limits_get_z_min();
-                float hi = sl_limits_get_z_max();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if ((hi - lo) >= SL_OSC_MIN_RANGE_MM) {
-                    if (s_z_passes_requested == 0u || s_z_reversal_count < 2u * (uint16_t)s_z_passes_requested) {
-                        int old_z = s_feed_auto_z_dir;
-                        if (zm >= hi - SL_OSC_HYST_MM) s_feed_auto_z_dir = -1;
-                        else if (zm <= lo + SL_OSC_HYST_MM) s_feed_auto_z_dir = 1;
-                        if (s_feed_auto_z_dir != old_z) {
-                            s_z_reversal_count++;
-                            if (s_z_reversal_count >= 2u && (s_z_reversal_count & 1u) == 0u) {
-                                float step_mm = x_step_mm_from_index(s_x_step_per_pass_index);
-                                int32_t x_steps = (int32_t)(step_mm * s_steps_per_mm_x + 0.5f);
-                                if (x_steps > 0) s_z_pass_x_pending_steps += x_steps;
-                            }
-                        }
-                        s_last_step_tick = s_isr_tick;
-                        HAL_GPIO_WritePin(Z_DIR_GPIO_Port, Z_DIR_Pin, s_feed_auto_z_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-                        dir_settle_delay();
-                        pulse_z_step(s_feed_auto_z_dir);
-                        return;
-                    }
-                }
-            } else {
-                float lo = sl_limits_get_x_min();
-                float hi = sl_limits_get_x_max();
-                if (lo > hi) { float t = lo; lo = hi; hi = t; }
-                if ((hi - lo) >= SL_OSC_MIN_RANGE_MM) {
-                    if (s_x_passes_requested == 0u || s_x_reversal_count < 2u * (uint16_t)s_x_passes_requested) {
-                        int old_x = s_feed_auto_x_dir;
-                        if (xm >= hi - SL_OSC_HYST_MM) s_feed_auto_x_dir = -1;
-                        else if (xm <= lo + SL_OSC_HYST_MM) s_feed_auto_x_dir = 1;
-                        if (s_feed_auto_x_dir != old_x) s_x_reversal_count++;
-                        s_last_step_tick = s_isr_tick;
-                        HAL_GPIO_WritePin(X_DIR_GPIO_Port, X_DIR_Pin, s_feed_auto_x_dir > 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-                        dir_settle_delay();
-                        pulse_x_step(s_feed_auto_x_dir);
-                        return;
-                    }
-                }
-            }
-        }
+        /* Нейтраль: без руху, тільки скидання лічильників реверсів */
         s_z_reversal_count = 0u;
         s_x_reversal_count = 0u;
         s_last_step_tick = s_isr_tick;
@@ -521,6 +528,13 @@ void jog_tick_from_isr(void) { (void)0; }  /* заглушка: джойстик
 
 void jog_process(void)
 {
+    feed_mode_t mode = manual_feed_get_mode();
+
+    if (mode == FEED_MODE_MANUAL) {
+        handle_manual_encoder_mode();
+        return;
+    }
+
     s_manual_mode = 1u;   /* за замовч. джойстик працює; 0 лише для Feed Auto */
     menu_screen_id_t scr = menu_current_screen();
 

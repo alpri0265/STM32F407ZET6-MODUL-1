@@ -1,10 +1,11 @@
 #include "encoder_menu.h"
 #include "main.h"
+#include "enc_if.h"
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Меню на трьох кнопках (PB12, PB13, PB14).
- * PB12 → вгору (CCW), PB13 → вниз (CW), PB14 → Enter.
+/* Меню на трьох кнопках (MENU_UP, MENU_DOWN, MENU_ENTER).
+ * MENU_UP → вгору (CCW), MENU_DOWN → вниз (CW), MENU_ENTER → Enter.
  * MENU_BTN_ACTIVE_HIGH: 1 = вгору/вниз натиснуто при HIGH. MENU_BTN_ENTER_ACTIVE_HIGH: окремо для PB14 (вибір).
  */
 #ifndef MENU_BTN_ACTIVE_HIGH
@@ -22,15 +23,15 @@ static uint32_t action_set_tick;
 /* Читання сирого рівня: 1 = натиснуто (залежить від MENU_BTN_ACTIVE_HIGH). */
 static bool raw_up(void)
 {
-    return (HAL_GPIO_ReadPin(MPG_A_GPIO_Port, MPG_A_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ACTIVE_HIGH != 0) : (MENU_BTN_ACTIVE_HIGH == 0);
+    return (HAL_GPIO_ReadPin(MENU_UP_GPIO_Port, MENU_UP_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ACTIVE_HIGH != 0) : (MENU_BTN_ACTIVE_HIGH == 0);
 }
 static bool raw_down(void)
 {
-    return (HAL_GPIO_ReadPin(MPG_B_GPIO_Port, MPG_B_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ACTIVE_HIGH != 0) : (MENU_BTN_ACTIVE_HIGH == 0);
+    return (HAL_GPIO_ReadPin(MENU_DOWN_GPIO_Port, MENU_DOWN_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ACTIVE_HIGH != 0) : (MENU_BTN_ACTIVE_HIGH == 0);
 }
 static bool raw_enter(void)
 {
-    return (HAL_GPIO_ReadPin(MPG_BTN_GPIO_Port, MPG_BTN_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ENTER_ACTIVE_HIGH != 0) : (MENU_BTN_ENTER_ACTIVE_HIGH == 0);
+    return (HAL_GPIO_ReadPin(MENU_ENTER_GPIO_Port, MENU_ENTER_Pin) == GPIO_PIN_SET) ? (MENU_BTN_ENTER_ACTIVE_HIGH != 0) : (MENU_BTN_ENTER_ACTIVE_HIGH == 0);
 }
 
 /* Дебаунс за часом: подія тільки після утримання натиснуто >= DEBOUNCE_MS. primed = спочатку побачили "відпущено". */
@@ -72,8 +73,8 @@ static void buttons_gpio_init(void)
     g.Mode = GPIO_MODE_INPUT;
     g.Pull = GPIO_PULLUP;
     g.Speed = GPIO_SPEED_FREQ_LOW;
-    g.Pin = MPG_A_Pin | MPG_B_Pin | MPG_BTN_Pin;
-    HAL_GPIO_Init(MPG_A_GPIO_Port, &g);
+    g.Pin = MENU_UP_Pin | MENU_DOWN_Pin | MENU_ENTER_Pin;
+    HAL_GPIO_Init(MENU_UP_GPIO_Port, &g);
 }
 
 void encoder_menu_init(void)
@@ -96,6 +97,9 @@ void encoder_menu_init(void)
     up_btn.last = raw_up();
     down_btn.last = raw_down();
     enter_btn.last = raw_enter();
+
+    /* Ініціалізація стану енкодера (RE60 на PB12/PB13) для enc_if */
+    enc_if_init_encoder_state();
 }
 
 void encoder_menu_process(void)

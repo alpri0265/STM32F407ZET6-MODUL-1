@@ -57,6 +57,16 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define FEED_MODE_Pin GPIO_PIN_2
+#define FEED_MODE_GPIO_Port GPIOE
+#define ENC_AXIS_S1_Pin GPIO_PIN_3
+#define ENC_AXIS_S1_GPIO_Port GPIOE
+#define ENC_AXIS_S2_Pin GPIO_PIN_4
+#define ENC_AXIS_S2_GPIO_Port GPIOE
+#define ENC_STEP_S1_Pin GPIO_PIN_5
+#define ENC_STEP_S1_GPIO_Port GPIOE
+#define ENC_STEP_S2_Pin GPIO_PIN_6
+#define ENC_STEP_S2_GPIO_Port GPIOE
 #define SCALE_0_Pin GPIO_PIN_0
 #define SCALE_0_GPIO_Port GPIOC
 #define SCA_Pin GPIO_PIN_1
@@ -97,6 +107,12 @@ void Error_Handler(void);
 #define MPG_B_GPIO_Port GPIOB
 #define MPG_BTN_Pin GPIO_PIN_14
 #define MPG_BTN_GPIO_Port GPIOB
+#define MENU_UP_Pin GPIO_PIN_8
+#define MENU_UP_GPIO_Port GPIOD
+#define MENU_DOWN_Pin GPIO_PIN_9
+#define MENU_DOWN_GPIO_Port GPIOD
+#define MENU_ENTER_Pin GPIO_PIN_10
+#define MENU_ENTER_GPIO_Port GPIOD
 #define SL_X_NEG_BIT_Pin GPIO_PIN_7
 #define SL_X_NEG_BIT_GPIO_Port GPIOC
 #define SL_X_POS_BIT_Pin GPIO_PIN_8

@@ -302,10 +302,10 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
@@ -323,6 +323,14 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, Z_DIR_Pin|Z_EN_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : FEED_MODE_Pin ENC_AXIS_S1_Pin ENC_AXIS_S2_Pin ENC_STEP_S1_Pin
+                           ENC_STEP_S2_Pin */
+  GPIO_InitStruct.Pin = FEED_MODE_Pin|ENC_AXIS_S1_Pin|ENC_AXIS_S2_Pin|ENC_STEP_S1_Pin
+                          |ENC_STEP_S2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SCALE_0_Pin SCA_Pin SL_X_NEG_BIT_Pin SL_X_POS_BIT_Pin
                            SL_Z_NEG_BIT_Pin SL_Z_POS_BIT_Pin */
@@ -374,6 +382,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : MENU_UP_Pin MENU_DOWN_Pin MENU_ENTER_Pin */
+  GPIO_InitStruct.Pin = MENU_UP_Pin|MENU_DOWN_Pin|MENU_ENTER_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pins : X_DIR_Pin X_EN_Pin */
   GPIO_InitStruct.Pin = X_DIR_Pin|X_EN_Pin;

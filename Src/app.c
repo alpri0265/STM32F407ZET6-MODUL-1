@@ -12,6 +12,7 @@
 #include "board.h"
 #include "adc_if.h"
 #include "sl_limits.h"
+#include "manual_feed_mode.h"
 #else
 #include "planner.h"
 #include "safety.h"
@@ -26,6 +27,7 @@ void app_init(void)
 #if BRINGUP_MODE
     menu_init();
     encoder_menu_init();
+    manual_feed_mode_init();
     jog_init();
     sl_limits_init();
 #else
@@ -50,10 +52,13 @@ void app_loop(void)
         jog_set_feed_override(f);
     }
     {
+        feed_mode_t mode = manual_feed_get_mode();
         float xm, zm;
         jog_get_pos_mm(&xm, &zm);
         sl_limits_set_test_mode(menu_current_screen() == SCREEN_SL_TEST);
-        sl_limits_process(xm, zm);  /* кнопки SL (навчання) + LED — на всіх екранах */
+        if (mode == FEED_MODE_AUTO) {
+            sl_limits_process(xm, zm);  /* SL (навчання) + LED — лише в автоматичному режимі */
+        }
     }
     jog_process();
 #endif
