@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "enc_if.h"
 #include "bringup_config.h"
+#include "axis_feedback.h"
 #if BRINGUP_MODE
 #include "jog.h"
 #endif
@@ -248,6 +249,9 @@ void TIM6_DAC_IRQHandler(void)
   if ((TIM6->SR & TIM_SR_UIF) != 0) {
     TIM6->SR = ~(uint32_t)TIM_SR_UIF;
     enc_if_poll_1ms();
+#if BRINGUP_MODE
+    axis_feedback_tick_1ms();
+#endif
 #if BRINGUP_MODE
     jog_tick_from_isr();  /* джойстик без меню — працює на всіх екранах */
 #endif

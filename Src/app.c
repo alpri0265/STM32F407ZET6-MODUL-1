@@ -13,6 +13,7 @@
 #include "adc_if.h"
 #include "sl_limits.h"
 #include "manual_feed_mode.h"
+#include "axis_feedback.h"
 #else
 #include "planner.h"
 #include "safety.h"
@@ -30,6 +31,7 @@ void app_init(void)
     manual_feed_mode_init();
     jog_init();
     sl_limits_init();
+    axis_feedback_init();
 #else
     planner_init();
     safety_init();

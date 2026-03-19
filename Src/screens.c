@@ -58,17 +58,33 @@ static void render_info_jog(void)
 {
     float x_mm = 0.0f, z_mm = 0.0f;
     jog_get_pos_mm(&x_mm, &z_mm);
+    int32_t xf = axis_feedback_pos_um(AXIS_X);
+    int32_t zf = axis_feedback_pos_um(AXIS_Z);
     unsigned int ju, jd, jl, jr, rapid;
     uint32_t steps_x, steps_z;
     jog_get_joy_state(&ju, &jd, &jl, &jr);
     jog_get_step_counts(&steps_x, &steps_z);
     jog_get_rapid_state(&rapid);
     char buf[LINE_LEN + 2];
-    lcd_print_line(0, "                    ");
-    (void)snprintf(buf, sizeof(buf), "X: %.2f StX:%lu    ", (double)x_mm, (unsigned long)steps_x);
-    buf[LINE_LEN] = '\0';
-    lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "Z: %.2f StZ:%lu    ", (double)z_mm, (unsigned long)steps_z);
+    {
+        int32_t x_abs = (xf < 0) ? -xf : xf;
+        int32_t z_abs = (zf < 0) ? -zf : zf;
+        char tmp[48];
+        (void)snprintf(tmp, sizeof(tmp), "Xf:%c%ld.%03ld",
+                       (xf < 0) ? '-' : '+', (long)(x_abs / 1000), (long)(x_abs % 1000));
+        (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp); /* pad/trim to clear old chars */
+        buf[LINE_LEN] = '\0';
+        lcd_print_line(0, buf);
+
+        (void)snprintf(tmp, sizeof(tmp), "Zf:%c%ld.%03ld",
+                       (zf < 0) ? '-' : '+', (long)(z_abs / 1000), (long)(z_abs % 1000));
+        (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+        buf[LINE_LEN] = '\0';
+        lcd_print_line(1, buf);
+    }
+    /* Рядок 3 (індекс 2): короткі мітки, щоб влізло в 20 символів */
+    (void)snprintf(buf, sizeof(buf), "X:%lu Z:%lu",
+                   (unsigned long)steps_x, (unsigned long)steps_z);
     buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
     (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u Up=Bk", ju, jd, jl, jr, rapid);
@@ -93,17 +109,32 @@ static void render_info_feed_auto(void)
 {
     float x_mm = 0.0f, z_mm = 0.0f;
     jog_get_pos_mm(&x_mm, &z_mm);
+    int32_t xf = axis_feedback_pos_um(AXIS_X);
+    int32_t zf = axis_feedback_pos_um(AXIS_Z);
     bool x_ok = sl_limits_x_taught();
     bool z_ok = sl_limits_z_taught();
     char buf[LINE_LEN + 2];
-    lcd_print_line(0, "Feed Auto: X Z     ");
-    (void)snprintf(buf, sizeof(buf), "X:%.1f Z:%.1f mm   ", (double)x_mm, (double)z_mm);
+    lcd_print_line(0, "Feed Auto        ");
+    {
+        int32_t x_abs = (xf < 0) ? -xf : xf;
+        int32_t z_abs = (zf < 0) ? -zf : zf;
+        char tmp[48];
+        (void)snprintf(tmp, sizeof(tmp), "Xf:%c%ld.%03ld",
+                       (xf < 0) ? '-' : '+', (long)(x_abs / 1000), (long)(x_abs % 1000));
+        (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+        buf[LINE_LEN] = '\0';
+        lcd_print_line(1, buf);
+
+        (void)snprintf(tmp, sizeof(tmp), "Zf:%c%ld.%03ld",
+                       (zf < 0) ? '-' : '+', (long)(z_abs / 1000), (long)(z_abs % 1000));
+        (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+        buf[LINE_LEN] = '\0';
+        lcd_print_line(2, buf);
+    }
+    (void)snprintf(buf, sizeof(buf), "X%c Z%c Joy SL [Bk]",
+                   x_ok ? '+' : '-', z_ok ? '+' : '-');
     buf[LINE_LEN] = '\0';
-    lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "X%c Z%c UDLR=move  ", x_ok ? '+' : '-', z_ok ? '+' : '-');
-    buf[LINE_LEN] = '\0';
-    lcd_print_line(2, buf);
-    lcd_print_line(3, "SL btn=teach [Back]");
+    lcd_print_line(3, buf);
 }
 
 static void render_info_z_passes(void)

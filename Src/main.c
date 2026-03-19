@@ -61,6 +61,7 @@ static void MX_TIM1_Init(void);
 static void MX_I2C2_Init(void);
 
 /* USER CODE BEGIN PFP */
+static void linear_encoders_init(void);
 
 /* USER CODE END PFP */
 
@@ -101,6 +102,7 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM1_Init();
   MX_I2C2_Init();
+  linear_encoders_init();
 
   /* TIM6: 1 ms для опитування енкодера (84 MHz / (83+1) / (999+1) = 1000 Hz) */
   __HAL_RCC_TIM6_CLK_ENABLE();
@@ -128,6 +130,31 @@ int main(void)
     app_loop();
   }
   /* USER CODE END 3 */
+}
+
+/* Запуск TIM2/TIM3 в режимі енкодера для лінійних датчиків на PA0/PA1 та PA6/PA7. */
+static void linear_encoders_init(void)
+{
+  __HAL_RCC_TIM2_CLK_ENABLE();
+  __HAL_RCC_TIM3_CLK_ENABLE();
+
+  /* TIM2: Encoder mode 3 (TI1+TI2), 32-bit */
+  TIM2->CR1 = 0;
+  TIM2->ARR = 0xFFFFFFFFu;
+  TIM2->CCMR1 = (1u << 0) | (1u << 8);  /* CC1S=01, CC2S=01 */
+  TIM2->CCER = 0;                       /* rising обоє */
+  TIM2->SMCR = (3u << 0);               /* SMS=011: encoder mode 3 */
+  TIM2->CNT = 0;
+  TIM2->CR1 = TIM_CR1_CEN;
+
+  /* TIM3: Encoder mode 3 (TI1+TI2), 16-bit */
+  TIM3->CR1 = 0;
+  TIM3->ARR = 0xFFFFu;
+  TIM3->CCMR1 = (1u << 0) | (1u << 8);
+  TIM3->CCER = 0;
+  TIM3->SMCR = (3u << 0);
+  TIM3->CNT = 0;
+  TIM3->CR1 = TIM_CR1_CEN;
 }
 
 /**
