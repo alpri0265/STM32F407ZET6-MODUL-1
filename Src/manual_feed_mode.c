@@ -11,8 +11,8 @@ void manual_feed_mode_init(void)
 feed_mode_t manual_feed_get_mode(void)
 {
     GPIO_PinState s = HAL_GPIO_ReadPin(FEED_MODE_GPIO_Port, FEED_MODE_Pin);
-    /* Активний LOW: 0 = MANUAL, 1 = AUTO (можна поміняти при підключенні) */
-    return (s == GPIO_PIN_RESET) ? FEED_MODE_MANUAL : FEED_MODE_AUTO;
+    /* FEED_MODE (PE2): 0 = AUTO, 1 = MANUAL (інверсія під фактичне підключення тумблера) */
+    return (s == GPIO_PIN_SET) ? FEED_MODE_MANUAL : FEED_MODE_AUTO;
 }
 
 encoder_axis_t manual_feed_get_axis(void)

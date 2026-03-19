@@ -308,6 +308,14 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, Z_DIR_Pin|Z_EN_Pin, GPIO_PIN_RESET);
 
+  /* FEED_MODE + тумблери осі/кроку енкодера (PE2..PE6). Без цього PE «плаває» → часто
+   * читається як MANUAL і jog_tick_from_isr() не крокує джойстик у «авто». */
+  GPIO_InitStruct.Pin = FEED_MODE_Pin|ENC_AXIS_S1_Pin|ENC_AXIS_S2_Pin|ENC_STEP_S1_Pin
+                          |ENC_STEP_S2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
   /*Configure GPIO pins : SCALE_0_Pin SCA_Pin SL_X_NEG_BIT_Pin SL_X_POS_BIT_Pin
                            SL_Z_NEG_BIT_Pin SL_Z_POS_BIT_Pin */
   GPIO_InitStruct.Pin = SCALE_0_Pin|SCA_Pin|SL_X_NEG_BIT_Pin|SL_X_POS_BIT_Pin
@@ -361,17 +369,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF4_I2C2;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : MPG_A_Pin (encoder channel A, EXTI rising for quadrature) */
-  GPIO_InitStruct.Pin = MPG_A_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  /* RE60 A/B/BTN — PB12..PB14 як входи з підтяжкою */
+  GPIO_InitStruct.Pin = MPG_A_Pin|MPG_B_Pin|MPG_BTN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(MPG_A_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : MPG_B_Pin MPG_BTN_Pin (encoder B and button, input only) */
-  GPIO_InitStruct.Pin = MPG_B_Pin|MPG_BTN_Pin;
+  /* Кнопки меню PD8/PD9/PD10 */
+  GPIO_InitStruct.Pin = MENU_UP_Pin|MENU_DOWN_Pin|MENU_ENTER_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(MENU_UP_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : X_DIR_Pin X_EN_Pin */
   GPIO_InitStruct.Pin = X_DIR_Pin|X_EN_Pin;
