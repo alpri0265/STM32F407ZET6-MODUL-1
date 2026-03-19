@@ -145,6 +145,10 @@ void Error_Handler(void);
 #define LIM_Z_NEG_GPIO_Port GPIOD
 #define LIM_Z_POS_Pin GPIO_PIN_7
 #define LIM_Z_POS_GPIO_Port GPIOD
+#define LIN_ZERO_X_Pin GPIO_PIN_4
+#define LIN_ZERO_X_GPIO_Port GPIOB
+#define LIN_ZERO_Z_Pin GPIO_PIN_5
+#define LIN_ZERO_Z_GPIO_Port GPIOB
 #define z_STEP_Pin GPIO_PIN_6
 #define z_STEP_GPIO_Port GPIOB
 #define Z_DIR_Pin GPIO_PIN_7

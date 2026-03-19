@@ -107,6 +107,10 @@ void Error_Handler(void);
 #define MPG_B_GPIO_Port GPIOB
 #define MPG_BTN_Pin GPIO_PIN_14
 #define MPG_BTN_GPIO_Port GPIOB
+#define LIN_ZERO_X_Pin GPIO_PIN_4
+#define LIN_ZERO_X_GPIO_Port GPIOB
+#define LIN_ZERO_Z_Pin GPIO_PIN_5
+#define LIN_ZERO_Z_GPIO_Port GPIOB
 /* Кнопки меню (окремі від енкодера RE60): PD8/PD9/PD10 */
 #define MENU_UP_Pin GPIO_PIN_8
 #define MENU_UP_GPIO_Port GPIOD

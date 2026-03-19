@@ -103,19 +103,6 @@ int main(void)
   MX_I2C2_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
-
-  /* TIM6: 1 ms — enc_if_poll_1ms + jog_tick_from_isr (BRINGUP). Без цього немає кроків джойстика/Feed Auto. */
-  __HAL_RCC_TIM6_CLK_ENABLE();
-  TIM6->PSC = 83;
-  TIM6->ARR = 999;
-  TIM6->CR1 = 0;
-  TIM6->EGR = TIM_EGR_UG;
-  TIM6->SR = 0;
-  TIM6->DIER = TIM_DIER_UIE;
-  HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 2, 0);
-  HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
-  TIM6->CR1 = TIM_CR1_CEN;
-
   /* USER CODE BEGIN 2 */
   app_init();
   (void)HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
@@ -481,8 +468,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SPINDLE_ON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : MPG_A_Pin MPG_B_Pin MPG_BTN_Pin */
-  GPIO_InitStruct.Pin = MPG_A_Pin|MPG_B_Pin|MPG_BTN_Pin;
+  /*Configure GPIO pins : MPG_A_Pin MPG_B_Pin MPG_BTN_Pin LIN_ZERO_X_Pin
+                           LIN_ZERO_Z_Pin */
+  GPIO_InitStruct.Pin = MPG_A_Pin|MPG_B_Pin|MPG_BTN_Pin|LIN_ZERO_X_Pin
+                          |LIN_ZERO_Z_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);

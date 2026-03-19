@@ -396,8 +396,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF4_I2C2;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /* RE60 A/B/BTN — PB12..PB14 як входи з підтяжкою */
-  GPIO_InitStruct.Pin = MPG_A_Pin|MPG_B_Pin|MPG_BTN_Pin;
+  /* RE60 A/B/BTN + кнопки обнулення лінійних енкодерів (PB4/PB5) */
+  GPIO_InitStruct.Pin = MPG_A_Pin|MPG_B_Pin|MPG_BTN_Pin|LIN_ZERO_X_Pin|LIN_ZERO_Z_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(MPG_A_GPIO_Port, &GPIO_InitStruct);

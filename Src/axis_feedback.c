@@ -40,3 +40,17 @@ int32_t axis_feedback_pos_um(axis_id_t axis)
 {
     return pos_um[axis];
 }
+
+void axis_feedback_zero(axis_id_t axis)
+{
+    /* tick_1ms() runs in TIM6 ISR; sync counters atomically */
+    __disable_irq();
+    if (axis == AXIS_X) {
+        pos_um[AXIS_X] = 0;
+        last_cnt2 = (uint32_t)TIM2->CNT;
+    } else if (axis == AXIS_Z) {
+        pos_um[AXIS_Z] = 0;
+        last_cnt3 = (uint16_t)TIM3->CNT;
+    }
+    __enable_irq();
+}

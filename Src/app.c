@@ -14,6 +14,7 @@
 #include "sl_limits.h"
 #include "manual_feed_mode.h"
 #include "axis_feedback.h"
+#include "linenc_zero_buttons.h"
 #else
 #include "planner.h"
 #include "safety.h"
@@ -32,6 +33,7 @@ void app_init(void)
     jog_init();
     sl_limits_init();
     axis_feedback_init();
+    linenc_zero_buttons_init();
 #else
     planner_init();
     safety_init();
@@ -63,6 +65,7 @@ void app_loop(void)
         }
     }
     jog_process();
+    linenc_zero_buttons_process();
 #endif
     screens_process();
 }
