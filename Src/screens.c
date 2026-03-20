@@ -29,6 +29,10 @@ static bool tool_angle_edit_mode;
 static unsigned int tool_angle_edit_value;
 static unsigned int tool_angle_edit_cursor;
 
+/* Mechanics editor state (SCREEN_MECHANICS). */
+static uint8_t mech_edit_axis = 0u;   /* 0=X, 1=Z */
+static uint8_t mech_edit_field = 0u;  /* 0=axis, 1=pitch, 2=steps/rev, 3=ratio */
+
 static void render_list_screen(void)
 {
     lcd_clear();
@@ -52,6 +56,52 @@ static void render_list_screen(void)
         buf[LINE_LEN] = '\0';
         lcd_print_line((uint8_t)i, buf);
     }
+}
+
+static void render_info_mechanics(void)
+{
+    axis_id_t axis = (mech_edit_axis == 0u) ? AXIS_X : AXIS_Z;
+    const axis_cfg_t *ax = system_axis_cfg(axis);
+
+    uint16_t pitch_x100 = system_mech_get_pitch_x100(axis);
+    uint16_t ms = system_mech_get_microstep(axis);
+    uint32_t ratio_x1000 = system_mech_get_reducer_ratio_x1000(axis);
+
+    unsigned int pitch_mm = pitch_x100 / 100u;
+    unsigned int pitch_fr = pitch_x100 % 100u;
+    unsigned int ratio_i = (unsigned int)(ratio_x1000 / 1000u);
+    unsigned long spmm = (unsigned long)(ax->steps_per_mm + 0.5f);
+
+    char buf[LINE_LEN + 2];
+    char tmp[64];
+
+    /* Line 0: axis */
+    (void)snprintf(tmp, sizeof(tmp), "%cMech %c", (mech_edit_field == 0u) ? '>' : ' ',
+                   (axis == AXIS_X) ? 'X' : 'Z');
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(0, buf);
+
+    /* Line 1: pitch */
+    (void)snprintf(tmp, sizeof(tmp), "%cPitch:%u.%02umm",
+                   (mech_edit_field == 1u) ? '>' : ' ', pitch_mm, pitch_fr);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(1, buf);
+
+    /* Line 2: steps/rev */
+    (void)snprintf(tmp, sizeof(tmp), "%cMicro:%u",
+                   (mech_edit_field == 2u) ? '>' : ' ', (unsigned)ms);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(2, buf);
+
+    /* Line 3: integer reducer ratio (10:1 => R=10) + resulting steps/mm */
+    (void)snprintf(tmp, sizeof(tmp), "%cR:%u sp:%lu",
+                   (mech_edit_field == 3u) ? '>' : ' ', ratio_i, spmm);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
+    lcd_print_line(3, buf);
 }
 
 static void render_info_jog(void)
@@ -378,6 +428,7 @@ static void render_info_screen(menu_screen_id_t id)
         case SCREEN_X_PASSES:   render_info_x_passes();    break;
         case SCREEN_AXIS_X:    render_info_axis_x();    break;
         case SCREEN_AXIS_Z:    render_info_axis_z();    break;
+        case SCREEN_MECHANICS:  render_info_mechanics(); break;
         case SCREEN_SPINDLE:   render_info_spindle();   break;
         case SCREEN_I2C_LCD:   render_info_i2c_lcd();   break;
         case SCREEN_ENCODERS:  render_info_encoders();  break;
@@ -533,6 +584,52 @@ void screens_process(void)
                     need_render = true;
                 }
                 /* Enter і CW — для Jog (перемикання осі, рух), не виходимо */
+            } else if (cur == SCREEN_MECHANICS && menu_can_back()) {
+                axis_id_t axis = (mech_edit_axis == 0u) ? AXIS_X : AXIS_Z;
+
+                if (act == ENCODER_MENU_ACTION_ENTER) {
+                    mech_edit_field = (uint8_t)((mech_edit_field + 1u) & 3u);
+                    need_render = true;
+                } else if (mech_edit_field == 0u && act == ENCODER_MENU_ACTION_CCW) {
+                    /* На полі axis: CCW вихід назад. */
+                    menu_back();
+                    need_render = true;
+                } else {
+                    int32_t dir = (act == ENCODER_MENU_ACTION_CW) ? +1 : -1;
+                    if (mech_edit_field == 0u) {
+                        /* Axis toggle */
+                        mech_edit_axis ^= 1u;
+                        jog_update_steps_per_mm_from_cfg();
+                        need_render = true;
+                    } else if (mech_edit_field == 1u) {
+                        /* Pitch: mm.mm -> x100 */
+                        int32_t v = (int32_t)system_mech_get_pitch_x100(axis);
+                        v += dir * 5; /* 0.05 мм */
+                        if (v < 100) v = 100;
+                        if (v > 2000) v = 2000; /* 20.00 мм */
+                        system_mech_set_pitch_x100(axis, (uint16_t)v);
+                        jog_update_steps_per_mm_from_cfg();
+                        need_render = true;
+                    } else if (mech_edit_field == 2u) {
+                        /* Microstep */
+                        int32_t v = (int32_t)system_mech_get_microstep(axis);
+                        v += dir * 1;
+                        if (v < 1) v = 1;
+                        if (v > 256) v = 256;
+                        system_mech_set_microstep(axis, (uint16_t)v);
+                        jog_update_steps_per_mm_from_cfg();
+                        need_render = true;
+                    } else if (mech_edit_field == 3u) {
+                        /* Reducer ratio: integer (1..20), step = 1 */
+                        int32_t ri = (int32_t)(system_mech_get_reducer_ratio_x1000(axis) / 1000u);
+                        ri += dir;
+                        if (ri < 1) ri = 1;
+                        if (ri > 20) ri = 20;
+                        system_mech_set_reducer_ratio_x1000(axis, (uint32_t)(ri * 1000u));
+                        jog_update_steps_per_mm_from_cfg();
+                        need_render = true;
+                    }
+                }
             } else if (st == MENU_SCREEN_INFO && menu_can_back()) {
                 if (cur == SCREEN_ENCODERS)
                     axis_feedback_save_last_displayed();

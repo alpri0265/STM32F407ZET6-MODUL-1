@@ -153,6 +153,15 @@ void jog_init(void)
     HAL_GPIO_Init(RAPID_BTN_GPIO_Port, &b);
 }
 
+void jog_update_steps_per_mm_from_cfg(void)
+{
+    /* ISR використовує кеш s_steps_per_mm_x/z, тому оновлюємо його при редагуванні параметрів. */
+    const axis_cfg_t *cx = system_axis_cfg(AXIS_X);
+    const axis_cfg_t *cz = system_axis_cfg(AXIS_Z);
+    s_steps_per_mm_x = (cx->steps_per_mm > 0.0f) ? cx->steps_per_mm : 1.0f;
+    s_steps_per_mm_z = (cz->steps_per_mm > 0.0f) ? cz->steps_per_mm : 1.0f;
+}
+
 /* 1 = рух від джойстика (JOY_UP/DOWN/LEFT/RIGHT), 0 = рух від кнопок меню */
 #define JOG_USE_JOYSTICK 1
 

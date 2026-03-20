@@ -4,6 +4,9 @@
 /* Jog осей X/Z по джойстику (JOY_UP/DOWN/LEFT/RIGHT). Викликати jog_process() з циклу або з TIM6. */
 void jog_init(void);
 void jog_process(void);
+/* Оновлює кеш steps_per_mm_x/z в ISR з system_config.
+ * Викликати після редагування механіки. */
+void jog_update_steps_per_mm_from_cfg(void);
 /* Викликати з TIM6 — тільки джойстик→крок, без меню (для надійності на всіх екранах). */
 void jog_tick_from_isr(void);
 /* Стан джойстика для відображення: 1 = натиснуто. up/down/left/right можуть бути NULL. */
@@ -14,6 +17,8 @@ void jog_get_step_counts(uint32_t *x, uint32_t *z);
 void jog_get_rapid_state(unsigned int *rapid);
 /* Позиція в мм (з кроків і steps_per_mm). */
 void jog_get_pos_mm(float *x_mm, float *z_mm);
+/* Оновлює кеш steps_per_mm з system_config (потрібно після редагування механіки в меню). */
+void jog_update_steps_per_mm_from_cfg(void);
 /* Встановити кеш feed override (raw 0..4095). */
 void jog_set_feed_override(uint16_t raw);
 /* Кількість проходів Z у Feed Auto (0 = без обмежень). */
