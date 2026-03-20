@@ -14,28 +14,33 @@
  */
 
 #define LINENC_FLASH_ADDR  0x08060000UL
-#define LINENC_MAGIC       0x4C4E4332UL /* "LNC2" */
+#define LINENC_MAGIC       0x4C4E4333UL /* "LNC3" */
 
 typedef struct {
     uint32_t magic;
     int32_t  offset_um_x;
     int32_t  offset_um_z;
-    uint32_t _pad; /* 16 байт даних + magic = рівно 4 слова для простого програмування */
+    int32_t  last_um_x; /* останнє відображене значення Xf у мкм */
+    int32_t  last_um_z; /* останнє відображене значення Zf у мкм */
 } linenc_nv_t;
 
 /* Накопичена позиція від дельт TIM (як раніше) */
 static volatile int32_t pos_um[2];
 static uint32_t last_cnt2;
 static uint16_t last_cnt3;
+static uint32_t s_last_move_tick;
 
 /* Зміщення з Flash (мкм), додається до pos_um */
 static int32_t s_nv_offset_um[2];
+static int32_t s_last_display_um[2];
 
 /* Дзеркало в RTC backup: якщо Flash не пише (WRP) — нуль лишається після reset; з VBAT — часто й після power cycle. */
 #define LINENC_BKP_MAGIC   0x4C4EU
 #define BKP10R_OFS         0x78U
 #define BKP11R_OFS         0x7CU
 #define BKP12R_OFS         0x80U
+#define BKP13R_OFS         0x84U
+#define BKP14R_OFS         0x88U
 
 static void backup_domain_enable(void)
 {
@@ -55,6 +60,8 @@ static void linenc_bkp_save(void)
     *(__IO uint32_t *)(RTC_BASE + BKP10R_OFS) = ((uint32_t)LINENC_BKP_MAGIC << 16) | 1u;
     *(__IO uint32_t *)(RTC_BASE + BKP11R_OFS) = (uint32_t)s_nv_offset_um[AXIS_X];
     *(__IO uint32_t *)(RTC_BASE + BKP12R_OFS) = (uint32_t)s_nv_offset_um[AXIS_Z];
+    *(__IO uint32_t *)(RTC_BASE + BKP13R_OFS) = (uint32_t)s_last_display_um[AXIS_X];
+    *(__IO uint32_t *)(RTC_BASE + BKP14R_OFS) = (uint32_t)s_last_display_um[AXIS_Z];
 }
 
 static void linenc_bkp_load(void)
@@ -65,16 +72,22 @@ static void linenc_bkp_load(void)
         return;
     s_nv_offset_um[AXIS_X] = (int32_t)(*(__IO uint32_t *)(RTC_BASE + BKP11R_OFS));
     s_nv_offset_um[AXIS_Z] = (int32_t)(*(__IO uint32_t *)(RTC_BASE + BKP12R_OFS));
+    s_last_display_um[AXIS_X] = (int32_t)(*(__IO uint32_t *)(RTC_BASE + BKP13R_OFS));
+    s_last_display_um[AXIS_Z] = (int32_t)(*(__IO uint32_t *)(RTC_BASE + BKP14R_OFS));
 }
 
 static void linenc_nv_load(void)
 {
     s_nv_offset_um[AXIS_X] = 0;
     s_nv_offset_um[AXIS_Z] = 0;
+    s_last_display_um[AXIS_X] = 0;
+    s_last_display_um[AXIS_Z] = 0;
     const linenc_nv_t *p = (const linenc_nv_t *)LINENC_FLASH_ADDR;
     if (p->magic == LINENC_MAGIC) {
         s_nv_offset_um[AXIS_X] = p->offset_um_x;
         s_nv_offset_um[AXIS_Z] = p->offset_um_z;
+        s_last_display_um[AXIS_X] = p->last_um_x;
+        s_last_display_um[AXIS_Z] = p->last_um_z;
         return;
     }
     /* Flash порожній або старий формат (LNC1 / TIM ref) — пробуємо backup */
@@ -87,7 +100,10 @@ static int linenc_nv_save(void)
     w.magic = LINENC_MAGIC;
     w.offset_um_x = s_nv_offset_um[AXIS_X];
     w.offset_um_z = s_nv_offset_um[AXIS_Z];
-    w._pad = 0xFFFFFFFFu;
+    w.last_um_x = pos_um[AXIS_X] + s_nv_offset_um[AXIS_X];
+    w.last_um_z = pos_um[AXIS_Z] + s_nv_offset_um[AXIS_Z];
+    s_last_display_um[AXIS_X] = w.last_um_x;
+    s_last_display_um[AXIS_Z] = w.last_um_z;
 
     __disable_irq();
 
@@ -130,7 +146,13 @@ static int linenc_nv_save(void)
         linenc_bkp_save();
         return -1;
     }
-    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, a + 12u, (uint64_t)w._pad) != HAL_OK) {
+    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, a + 12u, (uint64_t)(uint32_t)w.last_um_x) != HAL_OK) {
+        HAL_FLASH_Lock();
+        __enable_irq();
+        linenc_bkp_save();
+        return -1;
+    }
+    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, a + 16u, (uint64_t)(uint32_t)w.last_um_z) != HAL_OK) {
         HAL_FLASH_Lock();
         __enable_irq();
         linenc_bkp_save();
@@ -153,10 +175,15 @@ static int linenc_nv_save(void)
 void axis_feedback_init(void)
 {
     linenc_nv_load();
+    /* Після power-on TIM лічильники часто стартують з 0,
+     * тому інтегратор посади (pos_um) теж стартує з 0.
+     * Дисплей відновлюємо через nv offset (offset = last displayed при збереженні).
+     */
     pos_um[AXIS_X] = 0;
     pos_um[AXIS_Z] = 0;
     last_cnt2 = (uint32_t)TIM2->CNT;
     last_cnt3 = (uint16_t)TIM3->CNT;
+    s_last_move_tick = HAL_GetTick();
 }
 
 void axis_feedback_tick_1ms(void)
@@ -170,6 +197,9 @@ void axis_feedback_tick_1ms(void)
     int16_t d3 = (int16_t)(c3 - last_cnt3);
     last_cnt3 = c3;
     pos_um[AXIS_Z] += (int32_t)d3;
+
+    if (d2 != 0 || d3 != 0)
+        s_last_move_tick = HAL_GetTick();
 }
 
 float axis_feedback_pos_mm(axis_id_t axis)
@@ -207,4 +237,33 @@ void axis_feedback_zero(axis_id_t axis)
     }
     __enable_irq();
     (void)linenc_nv_save();
+}
+
+void axis_feedback_save_last_displayed(void)
+{
+    /* Робимо програмно "zero" в поточному місці, але не міняємо те,
+     * що бачить користувач на екрані: Xf/Zf мають залишитися як були,
+     * а після перезапуску відображення відновиться через offset.
+     */
+    __disable_irq();
+    /* поточний display = pos_um + offset */
+    int32_t x_display = pos_um[AXIS_X] + s_nv_offset_um[AXIS_X];
+    int32_t z_display = pos_um[AXIS_Z] + s_nv_offset_um[AXIS_Z];
+
+    pos_um[AXIS_X] = 0;
+    pos_um[AXIS_Z] = 0;
+    s_nv_offset_um[AXIS_X] = x_display;
+    s_nv_offset_um[AXIS_Z] = z_display;
+    last_cnt2 = (uint32_t)TIM2->CNT;
+    last_cnt3 = (uint16_t)TIM3->CNT;
+    s_last_move_tick = HAL_GetTick();
+    __enable_irq();
+
+    (void)linenc_nv_save();
+}
+
+uint32_t axis_feedback_ms_since_last_move(void)
+{
+    uint32_t now = HAL_GetTick();
+    return now - s_last_move_tick;
 }

@@ -526,11 +526,16 @@ void screens_process(void)
                 }
             } else if ((cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO || cur == SCREEN_SL_TEST) && menu_can_back()) {
                 if (act == ENCODER_MENU_ACTION_CCW) {
+                    /* Зберігаємо останній показ Xf/Zf при виході з Jog/Feed Auto */
+                    if (cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO)
+                        axis_feedback_save_last_displayed();
                     menu_back();
                     need_render = true;
                 }
                 /* Enter і CW — для Jog (перемикання осі, рух), не виходимо */
             } else if (st == MENU_SCREEN_INFO && menu_can_back()) {
+                if (cur == SCREEN_ENCODERS)
+                    axis_feedback_save_last_displayed();
                 menu_back();
                 need_render = true;
             } else if (st == MENU_SCREEN_LIST) {
@@ -559,6 +564,9 @@ void screens_process(void)
             static uint32_t last_adc_tick;
             static uint32_t last_limits_tick;
             static uint32_t last_jog_tick;
+            static uint32_t last_linenc_save_tick;
+            static int32_t  last_linenc_save_x_um;
+            static int32_t  last_linenc_save_z_um;
             uint32_t now = HAL_GetTick();
             if (cur == SCREEN_ADC_FAULT) {
                 if ((now - last_adc_tick) >= 250u)
@@ -577,6 +585,21 @@ void screens_process(void)
                     need_render = true;
                 if (need_render)
                     last_jog_tick = now;
+
+                /* Автозбереження раз в період, щоб гарантовано пережити 15с до power-off.
+                 * Це стирає flash досить часто (для тесту ок), але працює надійно.
+                 */
+#define LINENC_AUTOSAVE_PERIOD_MS  5000u
+                if ((now - last_linenc_save_tick) >= LINENC_AUTOSAVE_PERIOD_MS) {
+                    int32_t x_um = axis_feedback_pos_um(AXIS_X);
+                    int32_t z_um = axis_feedback_pos_um(AXIS_Z);
+                    if (x_um != last_linenc_save_x_um || z_um != last_linenc_save_z_um) {
+                        axis_feedback_save_last_displayed();
+                        last_linenc_save_tick = now;
+                        last_linenc_save_x_um = x_um;
+                        last_linenc_save_z_um = z_um;
+                    }
+                }
             }
             if (cur == SCREEN_FEED_MANUAL) {
                 if ((now - last_adc_tick) >= 250u)
