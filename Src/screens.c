@@ -27,7 +27,7 @@
 #define MENU_LIST_FILL_W 248
 
 #define LCD_OFFSET_Y     8
-#define LCD_ROW_HEIGHT   18
+#define LCD_ROW_HEIGHT   24   /* як FONT_H+ROW_GAP у lcd.c */
 #define TOUCH_COOLDOWN_MS 250
 
 static bool menu_need_redraw;

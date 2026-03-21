@@ -13,7 +13,7 @@
 #define LCD_COLS  20
 #define FONT_W    12   /* 5x7 масштаб 2x */
 #define FONT_H    14
-#define ROW_GAP   4
+#define ROW_GAP   10   /* відстань між рядками меню (разом з FONT_H = висота кроку) */
 #define OFFSET_X  8
 #define OFFSET_Y  8
 
