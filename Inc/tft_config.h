@@ -21,7 +21,7 @@
  * SDO(MISO)  не підключати    —                      —
  * —                           T_CS   ◄───────────── PE14
  * —                           T_DO   ─────────────► PE15  (MISO, тільки тач)
- * —                           T_IRQ  ─────────────► PE6   (опційно)
+ * —                           T_IRQ  (не підключати PE6 — на платі PE6 = ENC_STEP_S2!)
  *
  * Схема спільних пінів: PE7 і PE9 йдуть паралельно до SCK+T_CLK та SDI+T_DIN.
  * Різні CS (PE10 для дисплея, PE14 для тача) вибирають пристрій.
@@ -53,8 +53,7 @@
 #define TOUCH_CS_PIN    GPIO_PIN_14
 #define TOUCH_MISO_PORT GPIOE
 #define TOUCH_MISO_PIN  GPIO_PIN_15
-#define TOUCH_IRQ_PORT  GPIOE
-#define TOUCH_IRQ_PIN   GPIO_PIN_6
+/* T_IRQ не використовуємо — PE6 на MODUL-1 зайнятий енкодером (див. main.h). */
 
 /* Калібрування XPT2046 (підлаштуйте під свій модуль, якщо точки "їдуть") */
 #define TOUCH_X_MIN  300

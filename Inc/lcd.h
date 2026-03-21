@@ -5,7 +5,7 @@
 
 void lcd_init(void);
 void lcd_clear(void);
-/* Очищає лише область 4 рядків (швидше ніж lcd_clear) */
+/* Очищає область усіх рядків тексту (швидше ніж lcd_clear) */
 void lcd_clear_rows(void);
 void lcd_print(const char *str);
 void lcd_print_line(uint8_t row, const char *str);

@@ -23,6 +23,8 @@
 #define MENU_LINE_PREFIX "  "
 #define MENU_LINE_SEL    "> "
 #define LINE_LEN         20
+/* Текст меню: OFFSET_X(8) + 20 символів * 12 px — не треба чистити всю ширину 320 */
+#define MENU_LIST_FILL_W 248
 
 #define LCD_OFFSET_Y     8
 #define LCD_ROW_HEIGHT   18
@@ -71,7 +73,7 @@ static void render_list_screen(void)
         if (strcmp(s_last_lines[i], buf) != 0) {
             (void)strncpy(s_last_lines[i], buf, LINE_LEN);
             s_last_lines[i][LINE_LEN] = '\0';
-            ili9341_fill_rect(0, 8 + i * LCD_ROW_HEIGHT, 320, LCD_ROW_HEIGHT, 0x0000);
+            ili9341_fill_rect(0, 8 + i * LCD_ROW_HEIGHT, MENU_LIST_FILL_W, LCD_ROW_HEIGHT, 0x0000);
             lcd_print_line((uint8_t)i, buf);
         }
     }
@@ -151,14 +153,16 @@ static void render_info_jog(void)
         buf[LINE_LEN] = '\0';
         lcd_print_line(1, buf);
     }
-    /* Рядок 3 (індекс 2): короткі мітки, щоб влізло в 20 символів */
+    /* Рядок 2 — кроки; 3 — лише джойстик; 4 — підказка Back (окремо, щоб не злипалось) */
     (void)snprintf(buf, sizeof(buf), "X:%lu Z:%lu",
                    (unsigned long)steps_x, (unsigned long)steps_z);
     buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u Up/Ent=Bk", ju, jd, jl, jr, rapid);
+    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u",
+                   ju, jd, jl, jr, rapid);
     buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
+    lcd_print_line(4, "< Back              ");
 }
 
 static void render_info_feed_manual(void)
@@ -493,10 +497,16 @@ static void render_current_screen(void)
 {
     menu_screen_id_t cur = menu_current_screen();
     if (menu_screen_type(cur) == MENU_SCREEN_LIST) {
-        s_list_cache_was_info = false; /* скинемо в render_list_screen */
+        /* Після інфо (Jog тощо) — очистити текстову зону; інакше лишаються 3–4 рядки Jog.
+         * Кеш рядків скидається в render_list_screen() через s_list_cache_was_info (не обнуляти тут!). */
+        if (menu_screen_type(s_prev_menu_screen) == MENU_SCREEN_INFO)
+            lcd_clear_rows();
         render_list_screen();
     } else {
         s_list_cache_was_info = true;
+        /* Перехід список → інфо: список 6 рядків, інфо 4 — без очищення «хвости» знизу */
+        if (menu_screen_type(s_prev_menu_screen) == MENU_SCREEN_LIST)
+            lcd_clear_rows();
         render_info_screen(cur);
     }
 }
@@ -827,7 +837,8 @@ void screens_process(void)
         }
         if (need_render)
             render_current_screen();
-        s_prev_menu_screen = cur;
+        /* Після menu_back() cur ще старий — інакше наступний кадр знову need_render (подвійне оновлення). */
+        s_prev_menu_screen = menu_current_screen();
         /* Кут інструменту: тільки рядок з числом оновлювати раз на 100 мс (не в режимі Set) */
         if (cur == SCREEN_TOOL_ANGLE && !tool_angle_edit_mode) {
             static uint32_t last_tool_tick;

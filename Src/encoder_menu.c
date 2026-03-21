@@ -14,7 +14,7 @@
 #ifndef MENU_BTN_ENTER_ACTIVE_HIGH
 #define MENU_BTN_ENTER_ACTIVE_HIGH  1
 #endif
-#define DEBOUNCE_MS      35u   /* мінімальний час утримання для спрацювання */
+#define DEBOUNCE_MS      16u   /* швидша реакція меню; при дребеззі збільште */
 #define ACTION_TIMEOUT_MS 1500u /* якщо дію не забрали — скинути, щоб меню не зависало */
 
 static encoder_menu_action_t action;

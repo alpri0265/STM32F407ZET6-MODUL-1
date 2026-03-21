@@ -243,13 +243,25 @@ void ili9341_draw_char(int16_t x, int16_t y, char c, uint16_t fg, uint16_t bg)
         glyph = &font5x7[0];
     }
 
-    for (int col = 0; col < gw; col++) {
-        uint8_t line = glyph[col];
-        for (int row = 0; row < gh; row++) {
-            uint16_t color = (line & (1 << row)) ? fg : bg;
-            ili9341_fill_rect(x + col * scale, y + row * scale, scale, scale, color);
+    /* Один вікно RAMWR замість десятків fill_rect — набагато швидше на software SPI */
+    const int wpx = (int)gw * scale;
+    const int hpx = (int)gh * scale;
+    if (x < 0 || y < 0 || x + wpx > TFT_WIDTH || y + hpx > TFT_HEIGHT) return;
+
+    set_addr_window(x, y, x + wpx - 1, y + hpx - 1);
+    HAL_GPIO_WritePin(TFT_DC_PORT, TFT_DC_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(TFT_CS_PORT, TFT_CS_PIN, GPIO_PIN_RESET);
+    for (int py = 0; py < hpx; py++) {
+        const int row = py / scale;
+        for (int px = 0; px < wpx; px++) {
+            const int col = px / scale;
+            uint8_t line = glyph[col];
+            uint16_t color = (line & (1u << (unsigned)row)) ? fg : bg;
+            spiwrite((uint8_t)(color >> 8));
+            spiwrite((uint8_t)(color & 0xFF));
         }
     }
+    HAL_GPIO_WritePin(TFT_CS_PORT, TFT_CS_PIN, GPIO_PIN_SET);
 }
 
 void ili9341_draw_string(int16_t x, int16_t y, const char *str, uint16_t fg, uint16_t bg)
