@@ -140,7 +140,7 @@ static void render_info_jog(void)
                    (unsigned long)steps_x, (unsigned long)steps_z);
     buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u Up=Bk", ju, jd, jl, jr, rapid);
+    (void)snprintf(buf, sizeof(buf), "U%u D%u L%u R%u *%u Up/Ent=Bk", ju, jd, jl, jr, rapid);
     buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
 }
@@ -605,14 +605,13 @@ void screens_process(void)
                     need_render = true;
                 }
             } else if ((cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO || cur == SCREEN_SL_TEST) && menu_can_back()) {
-                if (act == ENCODER_MENU_ACTION_CCW) {
-                    /* Зберігаємо останній показ Xf/Zf при виході з Jog/Feed Auto */
+                /* Up (CCW) або Enter = вихід назад. CW лишаємо для Jog (рух). */
+                if (act == ENCODER_MENU_ACTION_CCW || act == ENCODER_MENU_ACTION_ENTER) {
                     if (cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO)
                         axis_feedback_save_last_displayed();
                     menu_back();
                     need_render = true;
                 }
-                /* Enter і CW — для Jog (перемикання осі, рух), не виходимо */
             } else if ((cur == SCREEN_AXIS_X || cur == SCREEN_AXIS_Z) && menu_can_back()) {
                 axis_id_t axis = (cur == SCREEN_AXIS_X) ? AXIS_X : AXIS_Z;
 
