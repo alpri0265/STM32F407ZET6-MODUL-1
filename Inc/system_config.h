@@ -16,7 +16,11 @@ typedef struct {
 } axis_cfg_t;
 
 void system_config_init(void);
+void system_config_save(void);  /* Зберегти в RTC backup (Save & exit). */
 const axis_cfg_t* system_axis_cfg(axis_id_t a);
+void system_axis_set_max_feed(axis_id_t axis, float v);
+void system_axis_set_min_mm(axis_id_t axis, float v);
+void system_axis_set_max_mm(axis_id_t axis, float v);
 
 /* Mechanics parameters (used to compute steps_per_mm). */
 uint16_t system_mech_get_pitch_x100(axis_id_t axis);

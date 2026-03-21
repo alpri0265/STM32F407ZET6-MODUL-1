@@ -33,6 +33,9 @@ static unsigned int tool_angle_edit_cursor;
 static uint8_t mech_edit_axis = 0u;   /* 0=X, 1=Z */
 static uint8_t mech_edit_field = 0u;  /* 0=axis, 1=pitch, 2=steps/rev, 3=ratio */
 
+/* Axis X/Z editor state (SCREEN_AXIS_X, SCREEN_AXIS_Z). */
+static uint8_t axis_edit_field = 0u;  /* 0=max_feed, 1=min_mm, 2=max_mm */
+
 static void render_list_screen(void)
 {
     lcd_clear();
@@ -227,12 +230,24 @@ static void render_info_axis_x(void)
 {
     const axis_cfg_t *c = system_axis_cfg(AXIS_X);
     char buf[LINE_LEN + 2];
+    char tmp[48];
     lcd_print_line(0, "Axis X             ");
-    (void)snprintf(buf, sizeof(buf), "steps/mm: %.0f    ", (double)c->steps_per_mm);
+    (void)snprintf(tmp, sizeof(tmp), "steps/mm: %.0f    ", (double)c->steps_per_mm);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "max feed: %.0f   ", (double)c->max_feed);
+    (void)snprintf(tmp, sizeof(tmp), "%cmax: %.0f       ", (axis_edit_field == 0u) ? '>' : ' ', (double)c->max_feed);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "min %.0f max %.0f ", (double)c->min_mm, (double)c->max_mm);
+    if (axis_edit_field == 1u)
+        (void)snprintf(tmp, sizeof(tmp), ">min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+    else if (axis_edit_field == 2u)
+        (void)snprintf(tmp, sizeof(tmp), " min %.0f>max %.0f ", (double)c->min_mm, (double)c->max_mm);
+    else
+        (void)snprintf(tmp, sizeof(tmp), " min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
 }
 
@@ -240,12 +255,24 @@ static void render_info_axis_z(void)
 {
     const axis_cfg_t *c = system_axis_cfg(AXIS_Z);
     char buf[LINE_LEN + 2];
+    char tmp[48];
     lcd_print_line(0, "Axis Z             ");
-    (void)snprintf(buf, sizeof(buf), "steps/mm: %.0f    ", (double)c->steps_per_mm);
+    (void)snprintf(tmp, sizeof(tmp), "steps/mm: %.0f    ", (double)c->steps_per_mm);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
-    (void)snprintf(buf, sizeof(buf), "max feed: %.0f   ", (double)c->max_feed);
+    (void)snprintf(tmp, sizeof(tmp), "%cmax: %.0f       ", (axis_edit_field == 0u) ? '>' : ' ', (double)c->max_feed);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
-    (void)snprintf(buf, sizeof(buf), "min %.0f max %.0f ", (double)c->min_mm, (double)c->max_mm);
+    if (axis_edit_field == 1u)
+        (void)snprintf(tmp, sizeof(tmp), ">min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+    else if (axis_edit_field == 2u)
+        (void)snprintf(tmp, sizeof(tmp), " min %.0f>max %.0f ", (double)c->min_mm, (double)c->max_mm);
+    else
+        (void)snprintf(tmp, sizeof(tmp), " min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+    (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
+    buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
 }
 
@@ -584,6 +611,37 @@ void screens_process(void)
                     need_render = true;
                 }
                 /* Enter і CW — для Jog (перемикання осі, рух), не виходимо */
+            } else if ((cur == SCREEN_AXIS_X || cur == SCREEN_AXIS_Z) && menu_can_back()) {
+                axis_id_t axis = (cur == SCREEN_AXIS_X) ? AXIS_X : AXIS_Z;
+
+                if (act == ENCODER_MENU_ACTION_ENTER) {
+                    axis_edit_field = (uint8_t)((axis_edit_field + 1u) % 3u);
+                    need_render = true;
+                } else if (axis_edit_field == 0u && act == ENCODER_MENU_ACTION_CCW) {
+                    menu_back();
+                    need_render = true;
+                } else {
+                    int32_t dir = (act == ENCODER_MENU_ACTION_CW) ? +1 : -1;
+                    const axis_cfg_t *ac = system_axis_cfg(axis);
+                    float v;
+                    if (axis_edit_field == 0u) {
+                        v = ac->max_feed + (float)(dir * 100);
+                        if (v < 100.0f) v = 100.0f;
+                        if (v > 20000.0f) v = 20000.0f;
+                        system_axis_set_max_feed(axis, v);
+                    } else if (axis_edit_field == 1u) {
+                        v = ac->min_mm + (float)dir;
+                        if (v < -2000.0f) v = -2000.0f;
+                        if (v > 2000.0f) v = 2000.0f;
+                        system_axis_set_min_mm(axis, v);
+                    } else {
+                        v = ac->max_mm + (float)dir;
+                        if (v < -2000.0f) v = -2000.0f;
+                        if (v > 2000.0f) v = 2000.0f;
+                        system_axis_set_max_mm(axis, v);
+                    }
+                    need_render = true;
+                }
             } else if (cur == SCREEN_MECHANICS && menu_can_back()) {
                 axis_id_t axis = (mech_edit_axis == 0u) ? AXIS_X : AXIS_Z;
 
@@ -602,9 +660,9 @@ void screens_process(void)
                         jog_update_steps_per_mm_from_cfg();
                         need_render = true;
                     } else if (mech_edit_field == 1u) {
-                        /* Pitch: mm.mm -> x100 */
+                        /* Pitch: мм, точність 0.01 */
                         int32_t v = (int32_t)system_mech_get_pitch_x100(axis);
-                        v += dir * 5; /* 0.05 мм */
+                        v += dir * 1; /* 0.01 мм */
                         if (v < 100) v = 100;
                         if (v > 2000) v = 2000; /* 20.00 мм */
                         system_mech_set_pitch_x100(axis, (uint16_t)v);

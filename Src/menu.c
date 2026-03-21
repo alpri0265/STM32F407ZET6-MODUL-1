@@ -1,4 +1,5 @@
 #include "menu.h"
+#include "system_config.h"
 #include <string.h>
 
 
@@ -91,6 +92,7 @@ void menu_enter(void)
     menu_screen_id_t child = list_child(cur, selected);
     if (child == SCREEN_NONE) return;
     if (child == SCREEN_ACTION_SAVE_EXIT) {
+        system_config_save();
         stack_top = 0;
         stack[0] = SCREEN_MAIN;
         selected = 0;
@@ -132,6 +134,9 @@ menu_screen_type_t menu_screen_type(menu_screen_id_t id)
         case SCREEN_TOOL_ANGLE_CALIB:
         case SCREEN_Z_PASSES:
         case SCREEN_X_PASSES:
+        case SCREEN_MECHANICS:
+        case SCREEN_AXIS_X:
+        case SCREEN_AXIS_Z:
         case SCREEN_INFO:
         default:
             return MENU_SCREEN_INFO;

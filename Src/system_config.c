@@ -1,4 +1,101 @@
 #include "system_config.h"
+#include "main.h"
+#include "stm32f4xx_hal.h"
+#include <string.h>
+
+/* RTC Backup: BKP3R-BKP9R, BKP15R-BKP18R (tool_angle: BKP0-2, linenc: BKP10-14) */
+#define SCFG_BKP_MAGIC  0x53434647UL  /* "SCFG" */
+#define BKP3R_OFS       0x5CU
+#define BKP4R_OFS       0x60U
+#define BKP5R_OFS       0x64U
+#define BKP6R_OFS       0x68U
+#define BKP7R_OFS       0x6CU
+#define BKP8R_OFS       0x70U
+#define BKP9R_OFS       0x74U
+#define BKP15R_OFS      0x8CU
+#define BKP16R_OFS      0x90U
+#define BKP17R_OFS      0x94U
+#define BKP18R_OFS      0x98U
+
+static void backup_domain_enable(void)
+{
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+    if ((RCC->BDCR & RCC_BDCR_RTCEN) == 0u) {
+        __HAL_RCC_LSI_ENABLE();
+        while (__HAL_RCC_GET_FLAG(RCC_FLAG_LSIRDY) == 0u) { }
+        RCC->BDCR = (RCC->BDCR & ~RCC_BDCR_RTCSEL) | RCC_BDCR_RTCSEL_1;
+        RCC->BDCR |= RCC_BDCR_RTCEN;
+    }
+}
+
+static void syscfg_nv_load(void)
+{
+    backup_domain_enable();
+    uint32_t w3 = *(__IO uint32_t *)(RTC_BASE + BKP3R_OFS);
+    if ((w3 & 0xFFFF0000UL) != (SCFG_BKP_MAGIC & 0xFFFF0000UL))
+        return;  /* No valid config */
+    uint32_t w4 = *(__IO uint32_t *)(RTC_BASE + BKP4R_OFS);
+    uint32_t w5 = *(__IO uint32_t *)(RTC_BASE + BKP5R_OFS);
+    uint32_t w6 = *(__IO uint32_t *)(RTC_BASE + BKP6R_OFS);
+    uint32_t w7 = *(__IO uint32_t *)(RTC_BASE + BKP7R_OFS);
+    uint32_t w8 = *(__IO uint32_t *)(RTC_BASE + BKP8R_OFS);
+    uint32_t w9 = *(__IO uint32_t *)(RTC_BASE + BKP9R_OFS);
+    uint32_t w15 = *(__IO uint32_t *)(RTC_BASE + BKP15R_OFS);
+    uint32_t w16 = *(__IO uint32_t *)(RTC_BASE + BKP16R_OFS);
+    uint32_t w17 = *(__IO uint32_t *)(RTC_BASE + BKP17R_OFS);
+    uint32_t w18 = *(__IO uint32_t *)(RTC_BASE + BKP18R_OFS);
+
+    pitch_x100[AXIS_X] = (uint16_t)(w4 & 0xFFFFu);
+    if (pitch_x100[AXIS_X] < 100u) pitch_x100[AXIS_X] = 500u;
+    pitch_x100[AXIS_Z] = (uint16_t)(w4 >> 16);
+    if (pitch_x100[AXIS_Z] < 100u) pitch_x100[AXIS_Z] = 500u;
+
+    microstep[AXIS_X] = (uint16_t)(w5 & 0xFFFFu);
+    if (microstep[AXIS_X] < 1u) microstep[AXIS_X] = 16u;
+    if (microstep[AXIS_X] > 256u) microstep[AXIS_X] = 16u;
+    microstep[AXIS_Z] = (uint16_t)(w5 >> 16);
+    if (microstep[AXIS_Z] < 1u) microstep[AXIS_Z] = 16u;
+    if (microstep[AXIS_Z] > 256u) microstep[AXIS_Z] = 16u;
+
+    reducer_ratio_x1000[AXIS_X] = w6;
+    if (reducer_ratio_x1000[AXIS_X] < 1000u) reducer_ratio_x1000[AXIS_X] = 10000u;
+    reducer_ratio_x1000[AXIS_Z] = w7;
+    if (reducer_ratio_x1000[AXIS_Z] < 1000u) reducer_ratio_x1000[AXIS_Z] = 10000u;
+
+    memcpy(&cfg[AXIS_X].max_feed, &w8, sizeof(float));
+    memcpy(&cfg[AXIS_Z].max_feed, &w9, sizeof(float));
+    memcpy(&cfg[AXIS_X].min_mm, &w15, sizeof(float));
+    memcpy(&cfg[AXIS_Z].min_mm, &w16, sizeof(float));
+    memcpy(&cfg[AXIS_X].max_mm, &w17, sizeof(float));
+    memcpy(&cfg[AXIS_Z].max_mm, &w18, sizeof(float));
+
+    apply_mech_to_axis(AXIS_X);
+    apply_mech_to_axis(AXIS_Z);
+}
+
+static void syscfg_nv_save(void)
+{
+    backup_domain_enable();
+    *(__IO uint32_t *)(RTC_BASE + BKP3R_OFS) = (SCFG_BKP_MAGIC & 0xFFFF0000UL) | 1u;
+    *(__IO uint32_t *)(RTC_BASE + BKP4R_OFS) = (uint32_t)pitch_x100[AXIS_X] | ((uint32_t)pitch_x100[AXIS_Z] << 16);
+    *(__IO uint32_t *)(RTC_BASE + BKP5R_OFS) = (uint32_t)microstep[AXIS_X] | ((uint32_t)microstep[AXIS_Z] << 16);
+    *(__IO uint32_t *)(RTC_BASE + BKP6R_OFS) = reducer_ratio_x1000[AXIS_X];
+    *(__IO uint32_t *)(RTC_BASE + BKP7R_OFS) = reducer_ratio_x1000[AXIS_Z];
+    uint32_t f;
+    memcpy(&f, &cfg[AXIS_X].max_feed, sizeof(float));
+    *(__IO uint32_t *)(RTC_BASE + BKP8R_OFS) = f;
+    memcpy(&f, &cfg[AXIS_Z].max_feed, sizeof(float));
+    *(__IO uint32_t *)(RTC_BASE + BKP9R_OFS) = f;
+    memcpy(&f, &cfg[AXIS_X].min_mm, sizeof(float));
+    *(__IO uint32_t *)(RTC_BASE + BKP15R_OFS) = f;
+    memcpy(&f, &cfg[AXIS_Z].min_mm, sizeof(float));
+    *(__IO uint32_t *)(RTC_BASE + BKP16R_OFS) = f;
+    memcpy(&f, &cfg[AXIS_X].max_mm, sizeof(float));
+    *(__IO uint32_t *)(RTC_BASE + BKP17R_OFS) = f;
+    memcpy(&f, &cfg[AXIS_Z].max_mm, sizeof(float));
+    *(__IO uint32_t *)(RTC_BASE + BKP18R_OFS) = f;
+}
 
 static axis_cfg_t cfg[2];
 static uint16_t pitch_x100[2];
@@ -36,11 +133,39 @@ void system_config_init(void)
     reducer_ratio_x1000[AXIS_Z] = 10000u; /* 10:1 */
     cfg[AXIS_Z] = (axis_cfg_t){0.0f, 2500.0f, -500.0f, 0.0f};
     apply_mech_to_axis(AXIS_Z);
+
+    syscfg_nv_load();  /* Перезаписати з RTC backup, якщо є валідні дані */
+}
+
+void system_config_save(void)
+{
+    syscfg_nv_save();
 }
 
 const axis_cfg_t* system_axis_cfg(axis_id_t a)
 {
     return &cfg[a];
+}
+
+void system_axis_set_max_feed(axis_id_t axis, float v)
+{
+    if (v < 100.0f) v = 100.0f;
+    if (v > 20000.0f) v = 20000.0f;
+    cfg[axis].max_feed = v;
+}
+
+void system_axis_set_min_mm(axis_id_t axis, float v)
+{
+    if (v < -2000.0f) v = -2000.0f;
+    if (v > 2000.0f) v = 2000.0f;
+    cfg[axis].min_mm = v;
+}
+
+void system_axis_set_max_mm(axis_id_t axis, float v)
+{
+    if (v < -2000.0f) v = -2000.0f;
+    if (v > 2000.0f) v = 2000.0f;
+    cfg[axis].max_mm = v;
 }
 
 uint16_t system_mech_get_pitch_x100(axis_id_t axis)
