@@ -1,95 +1,77 @@
+/**
+ * @file lcd.c
+ * @brief Обгортка lcd.h для TFT ILI9341 3.2" (SPI)
+ * Емулює 4 рядки x 20 символів як HD44780.
+ */
 #include "lcd.h"
-#include "main.h"                 // важливо: тут hi2c2
+#include "ili9341.h"
+#include "tft_config.h"
 #include "stm32f4xx_hal.h"
+#include <string.h>
 
-extern I2C_HandleTypeDef hi2c2;   // у вас I2C2
+#define LCD_ROWS  4
+#define LCD_COLS  20
+#define FONT_W    12   /* 5x7 масштаб 2x */
+#define FONT_H    14
+#define ROW_GAP   4
+#define OFFSET_X  8
+#define OFFSET_Y  8
 
-#define LCD_ADDR (0x27 << 1)      // якщо не працює → 0x3F << 1
+#define ROW_HEIGHT  (FONT_H + ROW_GAP)
 
-static void lcd_send(uint8_t data, uint8_t rs)
-{
-    uint8_t high = data & 0xF0;
-    uint8_t low  = (data << 4) & 0xF0;
+/* Координати Y для рядків 0..3 */
+static uint16_t row_y[LCD_ROWS];
 
-    uint8_t buf[4];
+#define FG_COLOR  ILI9341_WHITE
+#define BG_COLOR  ILI9341_BLACK
 
-    buf[0] = high | rs | 0x04 | 0x08;
-    buf[1] = high | rs | 0x08;
-    buf[2] = low  | rs | 0x04 | 0x08;
-    buf[3] = low  | rs | 0x08;
-
-    HAL_I2C_Master_Transmit(&hi2c2, LCD_ADDR, buf, 4, 100);
-}
-
-/* Запис символу градуса в CGRAM слот 0 (код 0x00). */
-static void lcd_load_degree_char(void)
-{
-    lcd_send(0x40, 0);  /* CGRAM address 0 */
-    /* Градус: коло 5x8 */
-    lcd_send(0x0E, 1);
-    lcd_send(0x11, 1);
-    lcd_send(0x11, 1);
-    lcd_send(0x0E, 1);
-    lcd_send(0x00, 1);
-    lcd_send(0x00, 1);
-    lcd_send(0x00, 1);
-    lcd_send(0x00, 1);
-    lcd_send(0x80, 0);  /* повернути адресу в DDRAM (рядок 0), щоб не губились перші символи */
-}
+#define DEG_PLACEHOLDER 0xFF
 
 void lcd_init(void)
 {
-    HAL_Delay(50);
-    lcd_send(0x33, 0);
-    lcd_send(0x32, 0);
-    lcd_send(0x28, 0);
-    lcd_send(0x0C, 0);
-    lcd_send(0x06, 0);
-    lcd_send(0x01, 0);
-    HAL_Delay(5);
+    ili9341_init();
+    ili9341_fill_screen(BG_COLOR);
+
+    for (int i = 0; i < LCD_ROWS; i++) {
+        row_y[i] = OFFSET_Y + i * (ROW_HEIGHT);
+    }
 }
 
 void lcd_clear(void)
 {
-    lcd_send(0x01, 0);
-    HAL_Delay(5);
+    ili9341_fill_screen(BG_COLOR);
 }
 
 void lcd_print(const char *str)
 {
-    while (*str)
-        lcd_send((uint8_t)*str++, 1);
+    (void)str;
+    /* Не використовується в screens.c; якщо потрібно — можна вивести в рядок 0 */
 }
-
-static const uint8_t row_addr[] = { 0x00, 0x40, 0x14, 0x54 };
-
-#define LCD_COLS 20
 
 void lcd_print_line(uint8_t row, const char *str)
 {
-    unsigned int n = 0;
-    if (row > 3) return;
-    lcd_send(0x80 | row_addr[row], 0);
-    while (*str && n < LCD_COLS) {
-        lcd_send((uint8_t)*str++, 1);
-        n++;
+    if (row >= LCD_ROWS) return;
+
+    uint16_t x = OFFSET_X;
+    uint16_t y = row_y[row];
+
+    for (unsigned int i = 0; i < LCD_COLS; i++) {
+        char c = (str[i] != '\0') ? str[i] : ' ';
+        ili9341_draw_char(x, y, c, FG_COLOR, BG_COLOR);
+        x += FONT_W;
     }
 }
-
-#define DEG_PLACEHOLDER 0xFF
 
 void lcd_print_line_deg(uint8_t row, const char *str)
 {
-    static uint8_t degree_loaded;
-    if (row > 3) return;
-    if (!degree_loaded) {
-        lcd_load_degree_char();
-        degree_loaded = 1;
-    }
-    lcd_send(0x80 | row_addr[row], 0);
-    while (*str) {
-        uint8_t c = (uint8_t)*str++;
-        lcd_send((c == DEG_PLACEHOLDER) ? 0u : c, 1);
+    if (row >= LCD_ROWS) return;
+
+    uint16_t x = OFFSET_X;
+    uint16_t y = row_y[row];
+
+    for (unsigned int i = 0; i < LCD_COLS; i++) {
+        uint8_t c = (str[i] != '\0') ? (uint8_t)str[i] : (uint8_t)' ';
+        ili9341_draw_char(x, y, (char)c, FG_COLOR, BG_COLOR);
+        x += FONT_W;
     }
 }
-

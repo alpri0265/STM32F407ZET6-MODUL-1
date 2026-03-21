@@ -1,7 +1,6 @@
 #ifndef LCD_H
 #define LCD_H
 #include "stm32f4xx_hal.h"
-#include "stm32f4xx_hal_i2c.h"
 
 
 void lcd_init(void);

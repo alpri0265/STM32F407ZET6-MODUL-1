@@ -702,7 +702,12 @@ void screens_process(void)
                     menu_select_next();
                     need_render = true;
                 } else if (act == ENCODER_MENU_ACTION_CCW) {
-                    menu_select_prev();
+                    /* Up на першому пункті підменю = вихід назад */
+                    if (menu_can_back() && menu_get_selected() == 0u) {
+                        menu_back();
+                    } else {
+                        menu_select_prev();
+                    }
                     need_render = true;
                 } else if (act == ENCODER_MENU_ACTION_ENTER) {
                     menu_enter();

@@ -22,11 +22,7 @@
 
 #define ESTOP_PIN   GPIO_PIN_0
 
-/* LCD 2004 I2C (20x4): PB10 = SCL, PB11 = SDA, I2C2 */
-#define LCD_I2C         I2C2
-#define LCD_I2C_SCL_PIN GPIO_PIN_10
-#define LCD_I2C_SCL_PORT GPIOB
-#define LCD_I2C_SDA_PIN GPIO_PIN_11
-#define LCD_I2C_SDA_PORT GPIOB
+/* TFT 3.2" ILI9341 SPI: PE7=SCK, PE9=MOSI, PE10=CS, PE11=DC, PE12=RST (див. tft_config.h) */
+/* Старий LCD 2004 I2C: PB10=SCL, PB11=SDA (не використовується при TFT) */
 
 #endif
