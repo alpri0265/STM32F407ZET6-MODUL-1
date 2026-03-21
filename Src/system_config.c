@@ -17,6 +17,27 @@
 #define BKP17R_OFS      0x94U
 #define BKP18R_OFS      0x98U
 
+static axis_cfg_t cfg[2];
+static uint16_t pitch_x100[2];
+static uint16_t microstep[2];
+static uint32_t reducer_ratio_x1000[2];
+
+#define MOTOR_FULL_STEPS_PER_REV 200u
+
+static uint32_t motor_steps_per_rev_from_microstep(axis_id_t a)
+{
+    return (uint32_t)MOTOR_FULL_STEPS_PER_REV * (uint32_t)microstep[a];
+}
+
+static void apply_mech_to_axis(axis_id_t a)
+{
+    float pitch_mm = (pitch_x100[a] > 0u) ? ((float)pitch_x100[a] / 100.0f) : 1.0f;
+    float ratio = (reducer_ratio_x1000[a] > 0u) ? ((float)reducer_ratio_x1000[a] / 1000.0f) : 0.0f;
+    float spmm = (pitch_mm > 0.0f) ? ((float)motor_steps_per_rev_from_microstep(a) * ratio / pitch_mm) : 0.0f;
+    if (spmm < 0.0001f) spmm = 0.0001f;
+    cfg[a].steps_per_mm = spmm;
+}
+
 static void backup_domain_enable(void)
 {
     __HAL_RCC_PWR_CLK_ENABLE();
@@ -95,28 +116,6 @@ static void syscfg_nv_save(void)
     *(__IO uint32_t *)(RTC_BASE + BKP17R_OFS) = f;
     memcpy(&f, &cfg[AXIS_Z].max_mm, sizeof(float));
     *(__IO uint32_t *)(RTC_BASE + BKP18R_OFS) = f;
-}
-
-static axis_cfg_t cfg[2];
-static uint16_t pitch_x100[2];
-static uint16_t microstep[2];
-static uint32_t reducer_ratio_x1000[2];
-
-/* Базові steps/rev для типового кроковика (1.8°). Якщо у вас інший motor — поміняйте тут. */
-#define MOTOR_FULL_STEPS_PER_REV 200u
-
-static uint32_t motor_steps_per_rev_from_microstep(axis_id_t a)
-{
-    return (uint32_t)MOTOR_FULL_STEPS_PER_REV * (uint32_t)microstep[a];
-}
-
-static void apply_mech_to_axis(axis_id_t a)
-{
-    float pitch_mm = (pitch_x100[a] > 0u) ? ((float)pitch_x100[a] / 100.0f) : 1.0f;
-    float ratio = (reducer_ratio_x1000[a] > 0u) ? ((float)reducer_ratio_x1000[a] / 1000.0f) : 0.0f;
-    float spmm = (pitch_mm > 0.0f) ? ((float)motor_steps_per_rev_from_microstep(a) * ratio / pitch_mm) : 0.0f;
-    if (spmm < 0.0001f) spmm = 0.0001f;
-    cfg[a].steps_per_mm = spmm;
 }
 
 void system_config_init(void)
