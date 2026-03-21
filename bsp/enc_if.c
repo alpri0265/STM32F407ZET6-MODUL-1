@@ -5,7 +5,7 @@
 static volatile bool a_pending;
 
 /* Енкодер: опитування з TIM6 кожні 1 мс */
-#define ENC_COOLDOWN_TICKS    30u  /* мс між кроками */
+#define ENC_COOLDOWN_TICKS    14u  /* мс між кроками декодера (меню/швидке гортання) */
 #define ENC_STABLE_READS      1u   /* 1 = відразу, 2+ = відсікає шум але може блокувати швидке обертання */
 static const int8_t enc_cw_next[]  = { 2, 0, 3, 1 };
 static const int8_t enc_ccw_next[]  = { 1, 3, 0, 2 };

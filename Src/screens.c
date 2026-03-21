@@ -28,7 +28,7 @@
 
 #define LCD_OFFSET_Y     8
 #define LCD_ROW_HEIGHT   24   /* як FONT_H+ROW_GAP у lcd.c */
-#define TOUCH_COOLDOWN_MS 250
+#define TOUCH_COOLDOWN_MS 100  /* антидребезг тачу; збільште, якщо спрацьовує подвійно */
 
 static bool menu_need_redraw;
 static uint32_t touch_last_handled;

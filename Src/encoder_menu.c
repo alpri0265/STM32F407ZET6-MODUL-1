@@ -14,7 +14,7 @@
 #ifndef MENU_BTN_ENTER_ACTIVE_HIGH
 #define MENU_BTN_ENTER_ACTIVE_HIGH  1
 #endif
-#define DEBOUNCE_MS      16u   /* швидша реакція меню; при дребеззі збільште */
+#define DEBOUNCE_MS       8u   /* мінімальний дебаунс; при дребеззі кнопок збільште до 12–16 */
 #define ACTION_TIMEOUT_MS 1500u /* якщо дію не забрали — скинути, щоб меню не зависало */
 
 static encoder_menu_action_t action;
@@ -112,13 +112,28 @@ void encoder_menu_process(void)
             up_btn.emitted = false;
             down_btn.emitted = false;
             enter_btn.emitted = false;
-        } else
+        } else {
+            /* Інакше enc_pending з TIM6 накопичується, поки screens не забере дію */
+            (void)enc_if_take_encoder_step();
             return;
+        }
     }
 
     poll_btn(&up_btn,   raw_up(),   ENCODER_MENU_ACTION_CCW);
     poll_btn(&down_btn,  raw_down(),  ENCODER_MENU_ACTION_CW);
     poll_btn(&enter_btn, raw_enter(), ENCODER_MENU_ACTION_ENTER);
+
+    /* Роторний енкодер (PB12/PB13): ті самі CW/CCW, що й кнопки Вниз/Вгору */
+    if (action == ENCODER_MENU_ACTION_NONE) {
+        int step = enc_if_take_encoder_step();
+        if (step == 1) {
+            action = ENCODER_MENU_ACTION_CW;
+            action_set_tick = now;
+        } else if (step == 2) {
+            action = ENCODER_MENU_ACTION_CCW;
+            action_set_tick = now;
+        }
+    }
 }
 
 encoder_menu_action_t encoder_menu_get_action(void)
