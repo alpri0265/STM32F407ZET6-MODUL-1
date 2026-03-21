@@ -284,14 +284,6 @@ static void render_info_axis_z(void)
     lcd_print_line(3, buf);
 }
 
-static void render_info_spindle(void)
-{
-    lcd_print_line(0, "Spindle settings   ");
-    lcd_print_line(1, "PWM / RPM          ");
-    lcd_print_line(2, "                   ");
-    lcd_print_line(3, "[Back]             ");
-}
-
 /* Усі кінцевики — індуктивні NPN: спрацювання = LOW (вихід сенсора в GND) */
 static bool limits_read_x_neg(void) { return HAL_GPIO_ReadPin(LIM_X_NEG_GPIO_Port, LIM_X_NEG_Pin) == GPIO_PIN_RESET; }
 static bool limits_read_x_pos(void) { return HAL_GPIO_ReadPin(LIM_X_POS_GPIO_Port, LIM_X_POS_Pin) == GPIO_PIN_RESET; }
@@ -464,7 +456,6 @@ static void render_info_screen(menu_screen_id_t id)
         case SCREEN_AXIS_X:    render_info_axis_x();    break;
         case SCREEN_AXIS_Z:    render_info_axis_z();    break;
         case SCREEN_MECHANICS:  render_info_mechanics(); break;
-        case SCREEN_SPINDLE:   render_info_spindle();   break;
         case SCREEN_I2C_LCD:   render_info_i2c_lcd();   break;
         case SCREEN_ENCODERS:  render_info_encoders();  break;
         case SCREEN_LIMITS:    render_info_limits();    break;
