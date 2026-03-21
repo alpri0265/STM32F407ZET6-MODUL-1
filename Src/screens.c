@@ -231,21 +231,25 @@ static void render_info_axis_x(void)
     const axis_cfg_t *c = system_axis_cfg(AXIS_X);
     char buf[LINE_LEN + 2];
     char tmp[48];
+    unsigned long spmm = (unsigned long)(c->steps_per_mm + 0.5f);
+    unsigned long mf = (unsigned long)(c->max_feed + 0.5f);
+    int minm = (int)(c->min_mm);
+    int maxm = (int)(c->max_mm);
     lcd_print_line(0, "Axis X             ");
-    (void)snprintf(tmp, sizeof(tmp), "steps/mm: %.0f    ", (double)c->steps_per_mm);
+    (void)snprintf(tmp, sizeof(tmp), "steps/mm: %lu     ", spmm);
     (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
     buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
-    (void)snprintf(tmp, sizeof(tmp), "%cmax: %.0f       ", (axis_edit_field == 0u) ? '>' : ' ', (double)c->max_feed);
+    (void)snprintf(tmp, sizeof(tmp), "%cmax: %lu        ", (axis_edit_field == 0u) ? '>' : ' ', mf);
     (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
     buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
     if (axis_edit_field == 1u)
-        (void)snprintf(tmp, sizeof(tmp), ">min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+        (void)snprintf(tmp, sizeof(tmp), ">min %d max %d   ", minm, maxm);
     else if (axis_edit_field == 2u)
-        (void)snprintf(tmp, sizeof(tmp), " min %.0f>max %.0f ", (double)c->min_mm, (double)c->max_mm);
+        (void)snprintf(tmp, sizeof(tmp), " min %d>max %d  ", minm, maxm);
     else
-        (void)snprintf(tmp, sizeof(tmp), " min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+        (void)snprintf(tmp, sizeof(tmp), " min %d max %d   ", minm, maxm);
     (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
     buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
@@ -256,21 +260,25 @@ static void render_info_axis_z(void)
     const axis_cfg_t *c = system_axis_cfg(AXIS_Z);
     char buf[LINE_LEN + 2];
     char tmp[48];
+    unsigned long spmm = (unsigned long)(c->steps_per_mm + 0.5f);
+    unsigned long mf = (unsigned long)(c->max_feed + 0.5f);
+    int minm = (int)(c->min_mm);
+    int maxm = (int)(c->max_mm);
     lcd_print_line(0, "Axis Z             ");
-    (void)snprintf(tmp, sizeof(tmp), "steps/mm: %.0f    ", (double)c->steps_per_mm);
+    (void)snprintf(tmp, sizeof(tmp), "steps/mm: %lu     ", spmm);
     (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
     buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
-    (void)snprintf(tmp, sizeof(tmp), "%cmax: %.0f       ", (axis_edit_field == 0u) ? '>' : ' ', (double)c->max_feed);
+    (void)snprintf(tmp, sizeof(tmp), "%cmax: %lu        ", (axis_edit_field == 0u) ? '>' : ' ', mf);
     (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
     buf[LINE_LEN] = '\0';
     lcd_print_line(2, buf);
     if (axis_edit_field == 1u)
-        (void)snprintf(tmp, sizeof(tmp), ">min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+        (void)snprintf(tmp, sizeof(tmp), ">min %d max %d   ", minm, maxm);
     else if (axis_edit_field == 2u)
-        (void)snprintf(tmp, sizeof(tmp), " min %.0f>max %.0f ", (double)c->min_mm, (double)c->max_mm);
+        (void)snprintf(tmp, sizeof(tmp), " min %d>max %d  ", minm, maxm);
     else
-        (void)snprintf(tmp, sizeof(tmp), " min %.0f max %.0f  ", (double)c->min_mm, (double)c->max_mm);
+        (void)snprintf(tmp, sizeof(tmp), " min %d max %d   ", minm, maxm);
     (void)snprintf(buf, sizeof(buf), "%-20.20s", tmp);
     buf[LINE_LEN] = '\0';
     lcd_print_line(3, buf);
@@ -506,6 +514,9 @@ void screens_process(void)
         if (cur != SCREEN_TOOL_ANGLE)
             tool_angle_edit_mode = false;
 
+        if (cur != s_prev_menu_screen)
+            need_render = true;
+
         if (act != ENCODER_MENU_ACTION_NONE) {
             if (cur == SCREEN_TOOL_ANGLE && menu_can_back()) {
                 if (tool_angle_edit_mode) {
@@ -621,7 +632,8 @@ void screens_process(void)
                     menu_back();
                     need_render = true;
                 } else {
-                    int32_t dir = (act == ENCODER_MENU_ACTION_CW) ? +1 : -1;
+                    /* UP (CCW) = +1, DOWN (CW) = -1 — логічно для користувача */
+                    int32_t dir = (act == ENCODER_MENU_ACTION_CCW) ? +1 : -1;
                     const axis_cfg_t *ac = system_axis_cfg(axis);
                     float v;
                     if (axis_edit_field == 0u) {
@@ -653,7 +665,8 @@ void screens_process(void)
                     menu_back();
                     need_render = true;
                 } else {
-                    int32_t dir = (act == ENCODER_MENU_ACTION_CW) ? +1 : -1;
+                    /* UP (CCW) = +1, DOWN (CW) = -1 */
+                    int32_t dir = (act == ENCODER_MENU_ACTION_CCW) ? +1 : -1;
                     if (mech_edit_field == 0u) {
                         /* Axis toggle */
                         mech_edit_axis ^= 1u;
