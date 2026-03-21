@@ -1,7 +1,7 @@
 /**
  * @file lcd.c
  * @brief Обгортка lcd.h для TFT ILI9341 3.2" (SPI)
- * Емулює 4 рядки x 20 символів як HD44780.
+ * Емулює 6 рядків x 20 символів.
  */
 #include "lcd.h"
 #include "ili9341.h"
@@ -9,7 +9,7 @@
 #include "stm32f4xx_hal.h"
 #include <string.h>
 
-#define LCD_ROWS  4
+#define LCD_ROWS  6
 #define LCD_COLS  20
 #define FONT_W    12   /* 5x7 масштаб 2x */
 #define FONT_H    14
@@ -19,7 +19,7 @@
 
 #define ROW_HEIGHT  (FONT_H + ROW_GAP)
 
-/* Координати Y для рядків 0..3 */
+/* Координати Y для рядків 0..5 */
 static uint16_t row_y[LCD_ROWS];
 
 #define FG_COLOR  ILI9341_WHITE
@@ -40,6 +40,13 @@ void lcd_init(void)
 void lcd_clear(void)
 {
     ili9341_fill_screen(BG_COLOR);
+}
+
+void lcd_clear_rows(void)
+{
+    for (int i = 0; i < LCD_ROWS; i++) {
+        ili9341_fill_rect(0, row_y[i], TFT_WIDTH, ROW_HEIGHT, BG_COLOR);
+    }
 }
 
 void lcd_print(const char *str)

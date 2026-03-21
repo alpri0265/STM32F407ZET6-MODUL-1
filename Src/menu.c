@@ -84,6 +84,19 @@ void menu_select_prev(void)
     }
 }
 
+void menu_set_selected(unsigned int index)
+{
+    menu_screen_id_t cur = stack[stack_top];
+    unsigned int n = 0;
+    if (menu_screen_type(cur) == MENU_SCREEN_LIST) {
+        if (cur == SCREEN_MAIN) n = list_count(main_items);
+        else if (cur == SCREEN_FEED) n = list_count(feed_items);
+        else if (cur == SCREEN_SETTINGS) n = list_count(settings_items);
+        else if (cur == SCREEN_DIAG) n = list_count(diag_items);
+        if (index < n) selected = index;
+    }
+}
+
 void menu_enter(void)
 {
     menu_screen_id_t cur = stack[stack_top];

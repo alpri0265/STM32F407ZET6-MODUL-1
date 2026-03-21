@@ -1,8 +1,10 @@
 #include "screens.h"
 #include "lcd.h"
+#include "ili9341.h"
 #include "system_state.h"
 #include "menu.h"
 #include "encoder_menu.h"
+#include "touch.h"
 #include "bringup_config.h"
 #include "main.h"
 #include "system_config.h"
@@ -22,7 +24,13 @@
 #define MENU_LINE_SEL    "> "
 #define LINE_LEN         20
 
+#define LCD_OFFSET_Y     8
+#define LCD_ROW_HEIGHT   18
+#define TOUCH_COOLDOWN_MS 250
+
 static bool menu_need_redraw;
+static uint32_t touch_last_handled;
+static bool s_list_cache_was_info;
 
 /* Режим введення куту вручну на екрані Tool angle; value в десятих (0-3599), cursor 0-3 (сотні, десятки, одиниці, десяті) */
 static bool tool_angle_edit_mode;
@@ -38,17 +46,20 @@ static uint8_t axis_edit_field = 0u;  /* 0=max_feed, 1=min_mm, 2=max_mm */
 
 static void render_list_screen(void)
 {
-    lcd_clear();
+    static char s_last_lines[6][LINE_LEN + 2];
+    if (s_list_cache_was_info) {
+        s_list_cache_was_info = false;
+        for (int i = 0; i < 6; i++) s_last_lines[i][0] = '\0';
+    }
     unsigned int n = menu_get_count();
     unsigned int sel = menu_get_selected();
-    /* Прокрутка: якщо пунктів > 4, показуємо вікно з 4 рядків так, щоб курсор був видно */
     unsigned int first = 0u;
-    if (n > 4u) {
-        first = (sel >= 3u) ? (sel - 3u) : 0u;
-        if (first + 4u > n) first = n - 4u;
+    if (n > 6u) {
+        first = (sel >= 5u) ? (sel - 5u) : 0u;
+        if (first + 6u > n) first = n - 6u;
     }
     char buf[LINE_LEN + 4];
-    for (unsigned int i = 0; i < 4u; i++) {
+    for (unsigned int i = 0; i < 6u; i++) {
         unsigned int idx = first + i;
         if (idx < n) {
             const char *prefix = (idx == sel) ? MENU_LINE_SEL : MENU_LINE_PREFIX;
@@ -57,7 +68,12 @@ static void render_list_screen(void)
         } else
             (void)snprintf(buf, sizeof(buf), "                    ");
         buf[LINE_LEN] = '\0';
-        lcd_print_line((uint8_t)i, buf);
+        if (strcmp(s_last_lines[i], buf) != 0) {
+            (void)strncpy(s_last_lines[i], buf, LINE_LEN);
+            s_last_lines[i][LINE_LEN] = '\0';
+            ili9341_fill_rect(0, 8 + i * LCD_ROW_HEIGHT, 320, LCD_ROW_HEIGHT, 0x0000);
+            lcd_print_line((uint8_t)i, buf);
+        }
     }
 }
 
@@ -476,15 +492,19 @@ static void render_info_screen(menu_screen_id_t id)
 static void render_current_screen(void)
 {
     menu_screen_id_t cur = menu_current_screen();
-    if (menu_screen_type(cur) == MENU_SCREEN_LIST)
+    if (menu_screen_type(cur) == MENU_SCREEN_LIST) {
+        s_list_cache_was_info = false; /* скинемо в render_list_screen */
         render_list_screen();
-    else
+    } else {
+        s_list_cache_was_info = true;
         render_info_screen(cur);
+    }
 }
 
 void screens_init(void)
 {
     lcd_init();
+    touch_init();
 #if BRINGUP_MODE
     lcd_clear();
 #endif
@@ -507,6 +527,40 @@ void screens_process(void)
 
         if (cur != s_prev_menu_screen)
             need_render = true;
+
+        /* Тачскрін: дотик = вибір рядка (список) або Back (інфо-екран) */
+        {
+            touch_point_t tp;
+            uint32_t now = HAL_GetTick();
+            if ((now - touch_last_handled) >= TOUCH_COOLDOWN_MS && touch_read(&tp) && tp.pressed) {
+                touch_last_handled = now;
+                if (st == MENU_SCREEN_LIST) {
+                    unsigned int n = menu_get_count();
+                    if (n > 0u) {
+                        unsigned int sel = menu_get_selected();
+                        unsigned int first = 0u;
+                        if (n > 6u) {
+                            first = (sel >= 5u) ? (sel - 5u) : 0u;
+                            if (first + 6u > n) first = n - 6u;
+                        }
+                        int row = (int)(tp.y - LCD_OFFSET_Y) / (int)LCD_ROW_HEIGHT;
+                        if (row >= 0 && row < 6) {
+                            unsigned int idx = first + (unsigned int)row;
+                            if (idx < n) {
+                                menu_set_selected(idx);
+                                menu_enter();
+                                need_render = true;
+                            }
+                        }
+                    }
+                } else if (menu_can_back()) {
+                    if (cur == SCREEN_JOG || cur == SCREEN_FEED_AUTO)
+                        axis_feedback_save_last_displayed();
+                    menu_back();
+                    need_render = true;
+                }
+            }
+        }
 
         if (act != ENCODER_MENU_ACTION_NONE) {
             if (cur == SCREEN_TOOL_ANGLE && menu_can_back()) {

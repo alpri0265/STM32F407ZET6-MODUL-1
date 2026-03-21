@@ -1,20 +1,31 @@
 /**
  * @file tft_config.h
- * @brief Конфігурація пінів для TFT 3.2" ILI9341 (SPI)
+ * @brief Конфігурація пінів для TFT 3.2" ILI9341 + XPT2046 touch (SPI)
  *
- * Software SPI на вільних пінах (PE7, PE9-PE12).
- * PE8 зайнятий (SPINDLE_ON).
+ * Software SPI. PE8 зайнятий (SPINDLE_ON).
  *
- * Підключення модуля ILI9341:
- *   TFT_SCK  -> PE7
- *   TFT_MOSI -> PE9
- *   TFT_CS   -> PE10
- *   TFT_DC   -> PE11
- *   TFT_RST  -> PE12
- *   TFT_BL   -> PE13  (підсвітка LED, HIGH = вкл.)
- *   VCC 5V (багато модулів потребують 5V!), GND
+ * ═══════════════════════════════════════════════════════════════════
+ * ПІДКЛЮЧЕННЯ (спільні лінії — один дріт до обох контактів модуля):
+ * ═══════════════════════════════════════════════════════════════════
  *
- * Альтернатива BL: LED модуля → 3.3V або 5V для постійної підсвітки.
+ * ДИСПЛЕЙ (ILI9341)          ТАЧ (XPT2046)           STM32
+ * ─────────────────          ─────────────           ─────
+ * VCC                         —                      3.3V або 5V
+ * GND                         —                      GND
+ * CS                          —                      PE10
+ * RESET                       —                      PE12
+ * DC                          —                      PE11
+ * SDI(MOSI)  ◄───┬──────────── T_DIN  ◄───────────── PE9   (спільно!)
+ * SCK        ◄───┴──────────── T_CLK  ◄───────────── PE7   (спільно!)
+ * LED                         —                      PE13
+ * SDO(MISO)  не підключати    —                      —
+ * —                           T_CS   ◄───────────── PE14
+ * —                           T_DO   ─────────────► PE15  (MISO, тільки тач)
+ * —                           T_IRQ  ─────────────► PE6   (опційно)
+ *
+ * Схема спільних пінів: PE7 і PE9 йдуть паралельно до SCK+T_CLK та SDI+T_DIN.
+ * Різні CS (PE10 для дисплея, PE14 для тача) вибирають пристрій.
+ * ═══════════════════════════════════════════════════════════════════
  */
 #ifndef TFT_CONFIG_H
 #define TFT_CONFIG_H
@@ -36,5 +47,23 @@
 
 #define TFT_WIDTH  320   /* ландшафт після MADCTL 0x68 */
 #define TFT_HEIGHT 240
+
+/* XPT2046 touch (SPI, спільні SCK/MOSI з дисплеєм) */
+#define TOUCH_CS_PORT   GPIOE
+#define TOUCH_CS_PIN    GPIO_PIN_14
+#define TOUCH_MISO_PORT GPIOE
+#define TOUCH_MISO_PIN  GPIO_PIN_15
+#define TOUCH_IRQ_PORT  GPIOE
+#define TOUCH_IRQ_PIN   GPIO_PIN_6
+
+/* Калібрування XPT2046 (підлаштуйте під свій модуль, якщо точки "їдуть") */
+#define TOUCH_X_MIN  300
+#define TOUCH_X_MAX  3900
+#define TOUCH_Y_MIN  400
+#define TOUCH_Y_MAX  3900
+/* Якщо X/Y замінені або інвертовані — розкоментуйте: */
+/* #define TOUCH_SWAP_XY  1 */
+/* #define TOUCH_INVERT_X 1 */
+/* #define TOUCH_INVERT_Y 1 */
 
 #endif /* TFT_CONFIG_H */

@@ -40,6 +40,7 @@ typedef enum {
 void menu_init(void);
 void menu_select_next(void);
 void menu_select_prev(void);
+void menu_set_selected(unsigned int index);
 void menu_enter(void);
 void menu_back(void);
 
