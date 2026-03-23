@@ -3,12 +3,14 @@
 #include <string.h>
 
 
+/* Головне меню: підписи без змін; підменю «Diagnostics» та «Info» перехрещені —
+ * «Diagnostics» відкриває екран Info (стан/збірка), «Info» — список I2C/Encoders/… */
 static const char *main_items[]     = { "Jog", "Feed", "Settings", "Diagnostics", "Tool angle", "Info", "" };
 static const char *feed_items[]     = { "Manual feed", "Automatic feed", "Z passes", "X passes", "< Back", "" };
 static const char *settings_items[] = { "Axis X", "Axis Z", "Mechanics", "Save & exit", "< Back", "" };
 static const char *diag_items[]     = { "I2C / LCD", "Encoders", "Limits", "SL test", "ADC / Fault", "Tool angle calib", "< Back", "" };
 
-static menu_screen_id_t main_children[]      = { SCREEN_JOG, SCREEN_FEED, SCREEN_SETTINGS, SCREEN_DIAG, SCREEN_TOOL_ANGLE, SCREEN_INFO };
+static menu_screen_id_t main_children[]      = { SCREEN_JOG, SCREEN_FEED, SCREEN_SETTINGS, SCREEN_INFO, SCREEN_TOOL_ANGLE, SCREEN_DIAG };
 static menu_screen_id_t feed_children[]      = { SCREEN_FEED_MANUAL, SCREEN_FEED_AUTO, SCREEN_Z_PASSES, SCREEN_X_PASSES, SCREEN_ACTION_BACK };
 static menu_screen_id_t settings_children[]  = { SCREEN_AXIS_X, SCREEN_AXIS_Z, SCREEN_MECHANICS, SCREEN_ACTION_SAVE_EXIT, SCREEN_ACTION_BACK };
 static menu_screen_id_t diag_children[]       = { SCREEN_I2C_LCD, SCREEN_ENCODERS, SCREEN_LIMITS, SCREEN_SL_TEST, SCREEN_ADC_FAULT, SCREEN_TOOL_ANGLE_CALIB, SCREEN_ACTION_BACK };

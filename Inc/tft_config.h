@@ -60,6 +60,22 @@
 #define TOUCH_X_MAX  3900
 #define TOUCH_Y_MIN  400
 #define TOUCH_Y_MAX  3900
+/* Після лінійного мапу в пікселі: зсув Y (від’ємне — вгору), якщо дотик «пливе» відносно тексту */
+#ifndef TOUCH_Y_PX_OFFSET
+#define TOUCH_Y_PX_OFFSET  0
+#endif
+/* Z1: м’якші межі — легкий дотик часто дає Z1 близько до «верху»; жорсткий фільтр = нестабільність */
+#ifndef TOUCH_Z1_PRESS_MAX
+#define TOUCH_Z1_PRESS_MAX  3950u
+#endif
+#ifndef TOUCH_Z1_PRESS_MIN
+#define TOUCH_Z1_PRESS_MIN  15u
+#endif
+/* #define TOUCH_SKIP_Z1  1 */
+/* 1 = підтяжка MISO до 3.3 V; 0 — якщо на модулі вже є резистор (інколи стабільніше без дубля) */
+#ifndef TOUCH_MISO_USE_PULLUP
+#define TOUCH_MISO_USE_PULLUP  0
+#endif
 /* Якщо X/Y замінені або інвертовані — розкоментуйте: */
 /* #define TOUCH_SWAP_XY  1 */
 /* #define TOUCH_INVERT_X 1 */

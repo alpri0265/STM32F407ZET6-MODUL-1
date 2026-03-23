@@ -12,6 +12,8 @@ typedef struct {
     uint16_t x;
     uint16_t y;
     bool     pressed;
+    uint16_t raw_x; /* сирі ADC (до SWAP/INVERT), для налагодження */
+    uint16_t raw_y;
 } touch_point_t;
 
 void touch_init(void);

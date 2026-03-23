@@ -28,7 +28,30 @@
 
 #define LCD_OFFSET_Y     8
 #define LCD_ROW_HEIGHT   24   /* як FONT_H+ROW_GAP у lcd.c */
-#define TOUCH_COOLDOWN_MS 100  /* антидребезг тачу; збільште, якщо спрацьовує подвійно */
+#define MENU_TOUCH_ROWS  6
+#define TOUCH_COOLDOWN_MS 55  /* після медіани в touch_read коротший інтервал можливий */
+
+/* Y → рядок 0..5: найближчий центр рядка (не ділення — менше помилок на межах рядків) */
+static int menu_row_from_touch_y(uint16_t y_px)
+{
+    int rel = (int)y_px - LCD_OFFSET_Y;
+    int best = 0;
+    int bestd = 0x7fff;
+    for (int i = 0; i < MENU_TOUCH_ROWS; i++) {
+        int center = i * (int)LCD_ROW_HEIGHT + (int)LCD_ROW_HEIGHT / 2;
+        int d = rel - center;
+        if (d < 0)
+            d = -d;
+        if (d < bestd) {
+            bestd = d;
+            best = i;
+        }
+    }
+    /* Далеко від будь-якого рядка — ігнор; +10 щоб верхній рядок ловився при легкому зсуві Y */
+    if (bestd > (int)LCD_ROW_HEIGHT / 2 + 10)
+        return -1;
+    return best;
+}
 
 static bool menu_need_redraw;
 static uint32_t touch_last_handled;
@@ -553,8 +576,9 @@ void screens_process(void)
                             first = (sel >= 5u) ? (sel - 5u) : 0u;
                             if (first + 6u > n) first = n - 6u;
                         }
-                        int row = (int)(tp.y - LCD_OFFSET_Y) / (int)LCD_ROW_HEIGHT;
-                        if (row >= 0 && row < 6) {
+                        /* Рядок тільки з піксельної Y — та сама сітка, що lcd_print_line (OFFSET_Y + i*ROW_HEIGHT) */
+                        int row = menu_row_from_touch_y(tp.y);
+                        if (row >= 0 && row < MENU_TOUCH_ROWS) {
                             unsigned int idx = first + (unsigned int)row;
                             if (idx < n) {
                                 menu_set_selected(idx);
