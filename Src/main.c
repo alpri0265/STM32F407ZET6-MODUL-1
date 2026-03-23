@@ -321,9 +321,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SPINDLE_ON_GPIO_Port, SPINDLE_ON_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, X_DIR_Pin|X_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
@@ -365,14 +362,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SPINDLE_PWM_Pin */
-  GPIO_InitStruct.Pin = SPINDLE_PWM_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF2_TIM5;
-  HAL_GPIO_Init(SPINDLE_PWM_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pins : ENC_Z_A_Pin ENC_Z_B_Pin */
   GPIO_InitStruct.Pin = ENC_Z_A_Pin|ENC_Z_B_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
@@ -380,13 +369,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : SPINDLE_ON_Pin */
-  GPIO_InitStruct.Pin = SPINDLE_ON_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SPINDLE_ON_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I2C2_SCL_Pin I2C2_SDA_Pin */
   GPIO_InitStruct.Pin = I2C2_SCL_Pin|I2C2_SDA_Pin;

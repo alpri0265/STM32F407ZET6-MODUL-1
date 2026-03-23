@@ -8,7 +8,6 @@
 #include "system_config.h"
 #include "fault.h"
 #include "axis_feedback.h"
-#include "temperature.h"
 #include "tool_angle.h"
 #include "board.h"
 #include "adc_if.h"
@@ -23,6 +22,7 @@
 #define LINE_LEN         20
 
 static bool menu_need_redraw;
+static uint8_t s_mpg_btn_last;
 
 /* Режим введення куту вручну на екрані Tool angle; value в десятих (0-3599), cursor 0-3 (сотні, десятки, одиниці, десяті) */
 static bool tool_angle_edit_mode;
@@ -341,7 +341,6 @@ static void render_info_encoders(void)
 
 static void render_info_adc_fault(void)
 {
-    float t_c = temperature_get_c();
     uint16_t feed_raw = adc_if_read(ADC_CH_FEED_OVERRIDE);
     uint16_t enc_raw = adc_if_read(ADC_CH_TOOL_ANGLE);
     float enc_deg_f = (float)enc_raw * 360.0f / 4095.0f;
@@ -349,10 +348,8 @@ static void render_info_adc_fault(void)
     unsigned int enc_t = (unsigned int)(enc_deg_f * 10.0f) % 10u;
     uint16_t fault = fault_get();
     char buf[LINE_LEN + 4];
-    unsigned int tc_d = (unsigned int)(t_c < 0.0f ? -t_c : t_c);
-    unsigned int tc_t = (unsigned int)((t_c < 0.0f ? -t_c : t_c) * 10.0f) % 10u;
     lcd_print_line(0, "ADC / Fault            ");
-    (void)snprintf(buf, sizeof(buf), "T:%s%u.%u C Feed:%u   ", t_c < 0.0f ? "-" : "", tc_d, tc_t, (unsigned)feed_raw);
+    (void)snprintf(buf, sizeof(buf), "Feed raw: %u         ", (unsigned)feed_raw);
     buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
     (void)snprintf(buf, sizeof(buf), "Enc: %u.%u %c          ", enc_d, enc_t, 0xFF);
@@ -487,6 +484,7 @@ void screens_init(void)
     lcd_init();
 #if BRINGUP_MODE
     lcd_clear();
+    s_mpg_btn_last = (HAL_GPIO_ReadPin(MPG_BTN_GPIO_Port, MPG_BTN_Pin) == GPIO_PIN_SET) ? 1u : 0u;
 #endif
 }
 
@@ -507,6 +505,18 @@ void screens_process(void)
 
         if (cur != s_prev_menu_screen)
             need_render = true;
+
+        /* PB14 (MPG_BTN): на екрані Tool angle виконує Zero (по фронту натискання). */
+        {
+            uint8_t mpg_now = (HAL_GPIO_ReadPin(MPG_BTN_GPIO_Port, MPG_BTN_Pin) == GPIO_PIN_SET) ? 1u : 0u;
+            if (cur == SCREEN_TOOL_ANGLE && !tool_angle_edit_mode) {
+                if (mpg_now && !s_mpg_btn_last) {
+                    tool_angle_zero();
+                    need_render = true;
+                }
+            }
+            s_mpg_btn_last = mpg_now;
+        }
 
         if (act != ENCODER_MENU_ACTION_NONE) {
             if (cur == SCREEN_TOOL_ANGLE && menu_can_back()) {

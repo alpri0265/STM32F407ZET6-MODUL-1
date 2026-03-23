@@ -17,7 +17,6 @@
 /* ADC channels mapping: logical 0=PA0, 1=PA1, 2=PA2, 3=PA3, 4=PA4, 5=PA5 */
 #define ADC_CH_FEED_OVERRIDE   4   /* PA4 = FEED_ADC (корекція подачі) */
 #define ADC_CH_TOOL_ANGLE      5   /* PA5, ADC1_IN5 — абсолютний енкодер (кут інструменту), 0..360 deg */
-#define ADC_CH_TEMPERATURE     3
 #define ADC_CH_POWER_MONITOR   4
 
 #define ESTOP_PIN   GPIO_PIN_0
