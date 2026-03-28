@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app.h"
+#include "board.h"
 #include "enc_if.h"
 /* USER CODE END Includes */
 
@@ -332,13 +333,26 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, Z_DIR_Pin|Z_EN_Pin, GPIO_PIN_RESET);
 
-  /* FEED_MODE + тумблери осі/кроку енкодера (PE2..PE6). Без цього PE «плаває» → часто
-   * читається як MANUAL і jog_tick_from_isr() не крокує джойстик у «авто». */
-  GPIO_InitStruct.Pin = FEED_MODE_Pin|ENC_AXIS_S1_Pin|ENC_AXIS_S2_Pin|ENC_STEP_S1_Pin
-                          |ENC_STEP_S2_Pin;
+  /* PE2..PE6 + за потреби PE7 (множник X100 пульта). Підтяжка, щоб не «плавали». */
+  {
+    uint32_t pe_in = FEED_MODE_Pin | ENC_AXIS_S1_Pin | ENC_AXIS_S2_Pin | ENC_STEP_S1_Pin
+                     | ENC_STEP_S2_Pin;
+#if MANUAL_FEED_USE_PENDANT_STEP_SWITCH
+    pe_in |= PENDSTEP_X100_Pin;
+#endif
+    GPIO_InitStruct.Pin = pe_in;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+  }
+
+#if MANUAL_FEED_USE_PENDANT_AXIS_SWITCH && MANUAL_FEED_PENDANT_AXIS_NEED_Y4
+  /* Пульт: дроти Y та вісь 4 (PA2/PA3), колишні TEMP/SPINDLE — лише як GPIO-вхід. */
+  GPIO_InitStruct.Pin = PENDAXIS_Y_Pin | PENDAXIS_4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+#endif
 
   /*Configure GPIO pins : SCALE_0_Pin SCA_Pin SL_X_NEG_BIT_Pin SL_X_POS_BIT_Pin
                            SL_Z_NEG_BIT_Pin SL_Z_POS_BIT_Pin */
@@ -432,8 +446,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : E_STOP_Pin FAULT_IN_Pin */
-  GPIO_InitStruct.Pin = E_STOP_Pin|FAULT_IN_Pin;
+  /* E_STOP PE0: пульт/панель NC + підтяжка; при розриві ланцюга — RISING. FAULT_IN PE1 — за схемою драйвера. */
+  GPIO_InitStruct.Pin = E_STOP_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = FAULT_IN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);

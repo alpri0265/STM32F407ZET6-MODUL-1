@@ -57,12 +57,8 @@ void system_request_resume(void)
 
 void system_request_error(uint16_t f)
 {
-#if BRINGUP_MODE
-    (void)f;
-#else
     fault_latch = f;
     req = SYS_STATE_ERROR;
-#endif
 }
 
 void system_request_reset(void)

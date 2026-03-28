@@ -524,8 +524,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : E_STOP_Pin FAULT_IN_Pin */
-  GPIO_InitStruct.Pin = E_STOP_Pin|FAULT_IN_Pin;
+  /* E_STOP PE0: пульт/панель NC + підтяжка; при розриві ланцюга — RISING. FAULT_IN PE1 — за схемою драйвера. */
+  GPIO_InitStruct.Pin = E_STOP_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = FAULT_IN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);

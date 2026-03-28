@@ -8,8 +8,32 @@
 #include "menu.h"
 #include "system_config.h"
 #include "sl_limits.h"
+#include "system_state.h"
 #include <stdint.h>
 #include <stdbool.h>
+
+/* ENA для DM556: узгоджено з блоком #if BRINGUP_MODE нижче */
+static void jog_drivers_disable(void)
+{
+#if ENA_ACTIVE_HIGH
+    HAL_GPIO_WritePin(X_EN_GPIO_Port, X_EN_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(Z_EN_GPIO_Port, Z_EN_Pin, GPIO_PIN_RESET);
+#else
+    HAL_GPIO_WritePin(X_EN_GPIO_Port, X_EN_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(Z_EN_GPIO_Port, Z_EN_Pin, GPIO_PIN_SET);
+#endif
+}
+
+static void jog_drivers_enable(void)
+{
+#if ENA_ACTIVE_HIGH
+    HAL_GPIO_WritePin(X_EN_GPIO_Port, X_EN_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(Z_EN_GPIO_Port, Z_EN_Pin, GPIO_PIN_SET);
+#else
+    HAL_GPIO_WritePin(X_EN_GPIO_Port, X_EN_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(Z_EN_GPIO_Port, Z_EN_Pin, GPIO_PIN_RESET);
+#endif
+}
 
 #if BRINGUP_MODE
 
@@ -304,6 +328,12 @@ static void handle_manual_encoder_mode(void)
 /* Генерація кроків з TIM6. При s_manual_mode==0 (Feed Auto) тут же робимо кроки ліміт→ліміт. */
 void jog_tick_from_isr(void)
 {
+#if BRINGUP_MODE
+    if (!system_state_is(SYS_STATE_READY)) {
+        jog_drivers_disable();
+        return;
+    }
+#endif
     /* У ручному режимі (MANUAL) рух від енкодера, джойстик/Feed Auto не крокують. */
     if (manual_feed_get_mode() == FEED_MODE_MANUAL)
         return;
@@ -537,6 +567,13 @@ void jog_tick_from_isr(void) { (void)0; }  /* заглушка: джойстик
 
 void jog_process(void)
 {
+#if BRINGUP_MODE
+    if (!system_state_is(SYS_STATE_READY)) {
+        jog_drivers_disable();
+        return;
+    }
+    jog_drivers_enable();
+#endif
     feed_mode_t mode = manual_feed_get_mode();
 
     if (mode == FEED_MODE_MANUAL) {

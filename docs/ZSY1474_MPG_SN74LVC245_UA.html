@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Пульт ZSY1474 / MPG100 → SN74LVC245A → STM32F407</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; max-width: 920px; color: #111; line-height: 1.5; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 16px; margin-top: 22px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    h3 { font-size: 14px; margin-top: 16px; }
+    p, li { font-size: 13px; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 12px; }
+    th, td { border: 1px solid #666; padding: 7px 8px; vertical-align: top; }
+    th { background: #f0f0f0; text-align: left; }
+    .note { background: #eef6ff; border-left: 4px solid #2563eb; padding: 10px 14px; margin: 14px 0; }
+    .warn { background: #fff8e6; border-left: 4px solid #e6a800; padding: 10px 14px; margin: 14px 0; }
+    .diagram { font-family: Consolas, monospace; font-size: 11px; line-height: 1.35; background: #fafafa; border: 1px solid #ccc; padding: 14px; overflow-x: auto; white-space: pre; }
+    code { font-family: Consolas, monospace; background: #eee; padding: 1px 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<h1>Підключення пульта ZSY1474 / MPG100 через SN74LVC245A до STM32F407 (MODUL-1)</h1>
+<p>Мета: безпечно подати на MCU рівні <b>0…3,3&nbsp;V</b>, якщо MPG пульта живиться від <b>5&nbsp;V</b> і видає логіку до 5&nbsp;V на фазах <b>A/B</b>. Базова електрика та розпіновка МС — як у <a href="LINEAR_ENCODER_SN74LVC245_STM32_UA.html">LINEAR_ENCODER_SN74LVC245_STM32_UA.html</a>.</p>
+
+<div class="warn">
+  <b>SN74LVC245A (20 ніг)</b> — одне живлення <b>VCC = +3,3&nbsp;V</b>. Входи на стороні <b>A</b> приймають до <b>5,5&nbsp;V</b> (див. даташит). Виходи на <b>B</b> — 0 / 3,3&nbsp;V.<br/>
+  Не плутати з <b>SN74LVC8T245</b> (24 ноги, два домени живлення) — там інша схема включення.
+</div>
+
+<h2>1. Що потрібно з апаратури</h2>
+<ul>
+  <li>Мікросхема <b>SN74LVC245A</b> (або сумісна 74LVC245, корпус TSSOP-20 / SOIC-20).</li>
+  <li><b>+3,3&nbsp;V</b> і <b>GND</b> з плати STM32 на <b>VCC (20)</b> і <b>GND (10)</b>.</li>
+  <li>Кераміка <b>100&nbsp;nF</b> між VCC і GND біля МС.</li>
+  <li><b>DIR (1)</b> → логічна <b>1</b> на 3,3&nbsp;V (наприклад резистор 10&nbsp;kΩ до +3,3&nbsp;V).</li>
+  <li><b>OE (19)</b> → <b>GND</b> (шина виходів активна).</li>
+  <li>Живлення пульта <b>+5&nbsp;V / 0&nbsp;V</b> (червоний/чорний) — як у мануалі; GND спільний з STM32 і з 245.</li>
+  <li>Якщо вихід MPG — <b>open-collector</b>: підтяжки <b>4,7…10&nbsp;kΩ</b> від ліній <b>A і B</b> до <b>+5&nbsp;V</b> на стороні пульта (перед входами A1/A2 МС).</li>
+</ul>
+
+<h2>2. Куди що йде (тільки MPG A/B через 245)</h2>
+<p>Кольори з мануала Connection: <b>Green = A</b>, <b>White = B</b>. Лінії <b>A/</b> і <b>B/</b> при однопровідному режимі <b>не</b> підключають до 245.</p>
+<table>
+  <tr><th>Пульт (дріт)</th><th>Вхід 245 (сторона A)</th><th>Нога</th><th>Вихід 245 (B)</th><th>Нога</th><th>STM32 (проєкт)</th></tr>
+  <tr><td>Green — A</td><td>A1</td><td>2</td><td>B1 → дріт</td><td>18</td><td><b>PB12</b> (<code>MPG_A</code>)</td></tr>
+  <tr><td>White — B</td><td>A2</td><td>3</td><td>B2 →</td><td>17</td><td><b>PB13</b> (<code>MPG_B</code>)</td></tr>
+</table>
+<p>Режим передачі: <b>OE=0</b>, <b>DIR=1</b> → <b>A → B</b> (5&nbsp;V-вхідна сторона A, 3,3&nbsp;V до MCU на B).</p>
+
+<div class="diagram">  Пульт +5V / GND (Red/Black) ─── живлення MPG (як у мануалі)
+
+  +3.3V ── VCC(20)   SN74LVC245A   GND(10) ── GND
+           │
+  DIR(1) ──[10k]── +3.3V          OE(19) ── GND
+
+  Green A ──► A1(2)     B1(18) ──► PB12
+  White B ──► A2(3)     B2(17) ──► PB13
+
+  A3…A8 (4–9) ── GND   (невикористані входи A)</div>
+
+<h2>3. Що <i>не</i> варто ганяти через 245</h2>
+<ul>
+  <li><b>E-stop C / CN</b> і ланцюг <b>PE0</b> — це «сухі» контакти на <b>GND</b>, не 5&nbsp;V логіка з пульта. Підключайте <b>напряму</b> до схеми стопу (див. <a href="ZSY1474_MPG_PENDANT_WIRING_UA.html">ZSY1474_MPG_PENDANT_WIRING_UA.html</a>).</li>
+  <li><b>Перемикачі осі та X1/X10/X100</b> у проєкті працюють як «лінія до GND через COM», підтяжка на MCU. Якщо дроти йдуть лише на землю/відірвані — рівень задає STM32; <b>245 не обов’язковий</b>. Якщо ж виробник вивів на ці лінії жорсткі 5&nbsp;V — тоді або ті самі канали 245 (A3…), або окрема МС.</li>
+  <li><b>LED+ / LED−</b> — живлення підсвітки, не сигнали GPIO.</li>
+</ul>
+
+<h2>4. Спільна МС з лінійними енкодерами (зайві канали)</h2>
+<p>Так — можна використати <b>ту саму</b> SN74LVC245A, що вже стоїть під лінійні енкодери (<a href="LINEAR_ENCODER_SN74LVC245_STM32_UA.html">LINEAR_ENCODER_SN74LVC245_STM32_UA.html</a>): там зайняті лише <b>чотири</b> канали (<b>A1–A4</b> → <b>B1–B4</b> на <b>PA0, PA1, PA6, PA7</b>). Решта входів <b>A5–A8</b> у тому гайді зазвичай на <b>GND</b> — це якраз резерв.</p>
+<p>Для пульта MPG підключіть:</p>
+<ul>
+  <li><b>Green / White</b> (A, B пульта) на <b>A5, A6</b> (ноги 6 і 7);</li>
+  <li><b>B5, B6</b> (ноги 14 і 13) на <b>PB12, PB13</b>;</li>
+  <li><b>A7, A8</b> залиште на GND, якщо ці канали не потрібні.</li>
+</ul>
+<p><b>DIR</b> і <b>OE</b> спільні для всіх каналів — режим той самий (<b>A→B</b>). На платі приберіть старе «A5/A6 на землю», якщо воно було розведене дротом.</p>
+
+<h2>5. Друга мікросхема 245 (за потреби)</h2>
+<p>Одна SN74LVC245A дає 8 каналів. Якщо лінійні енкодери не використовуються — для лише <b>MPG A/B</b> достатньо однієї МС з <b>A1/A2</b> і рештою невикористаних входів на GND (як у §2).</p>
+<p>Якщо потрібно зрівняти <b>усі</b> 5&nbsp;V виходи пульта (наприклад додаткові лінії), використовуйте другий корпус або шину з кількох буферів — кожен канал: 5&nbsp;V логіка на <b>Ai</b>, вихід <b>Bi</b> на відповідний пін MCU.</p>
+
+<h2>6. Диференційний вихід (A/, B/)</h2>
+<p>Якщо пульт з лінійним драйвером і ви використовуєте лише <b>Green/White</b> як однопровідні сигнали відносно GND — їх і подають на <b>A1/A2</b>. Пари <b>Purple / Purple-Black</b> зазвичай <b>не</b> підключають. Якщо рівні на Green/White не 0/5&nbsp;V, а вузькі диференційні — спочатку потрібен приймач RS422, потім TTL на 245.</p>
+
+<h2>7. Перевірка</h2>
+<ol>
+  <li>Спільна <b>GND</b>: пульт, 245, STM32.</li>
+  <li>При обертанні MPG на <b>PB12/PB13</b> — прямокутні імпульси <b>0…3,3&nbsp;V</b> (осцилограф або логічний аналізатор).</li>
+  <li>Якщо немає імпульсів — перевірте підтяжки для open-collector, живлення пульта, DIR/OE.</li>
+</ol>
+
+<p class="small" style="margin-top:20px;">Проєкт: STM32F407ZET6-MODUL-1. Детальна карта дротів пульта — <a href="ZSY1474_MPG_PENDANT_WIRING_UA.html">ZSY1474_MPG_PENDANT_WIRING_UA.html</a>.</p>
+
+</body>
+</html>
