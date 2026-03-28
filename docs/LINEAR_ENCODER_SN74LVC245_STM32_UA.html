@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Лінійні енкодери 5V → 74LVC245A → STM32F407</title>
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; margin: 28px; max-width: 920px; color: #1a1a1a; line-height: 1.5; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    h2 { font-size: 17px; margin-top: 28px; padding-bottom: 6px; border-bottom: 2px solid #333; }
+    h3 { font-size: 14px; margin-top: 18px; }
+    p, li { font-size: 14px; }
+    .note { background: #f4f7fb; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 16px 0; }
+    .warn { background: #fff8f0; border-left: 4px solid #ea580c; padding: 12px 16px; margin: 16px 0; }
+    .diff { background: #f5f5f5; border: 1px solid #ccc; padding: 12px 16px; margin: 16px 0; font-size: 13px; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+    th, td { border: 1px solid #888; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #e8ecf1; }
+    code { font-family: Consolas, "Courier New", monospace; background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+    .diagram { font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.3; background: #fafafa; border: 1px solid #ccc; padding: 16px; overflow-x: auto; white-space: pre; }
+    .chip { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin: 20px 0; font-size: 13px; }
+    .chip-box { border: 2px solid #333; border-radius: 6px; padding: 14px 18px; background: #fff; text-align: center; font-weight: 600; }
+    .arrow { text-align: center; font-size: 20px; color: #2563eb; }
+    .small { font-size: 12px; color: #444; }
+    ol.steps { counter-reset: step; list-style: none; padding-left: 0; }
+    ol.steps > li { counter-increment: step; margin: 12px 0; padding-left: 36px; position: relative; }
+    ol.steps > li::before { content: counter(step); position: absolute; left: 0; width: 26px; height: 26px; background: #2563eb; color: #fff; border-radius: 50%; text-align: center; line-height: 26px; font-size: 13px; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+  <h1>Лінійні енкодери (5V) → SN74LVC245A → STM32F407ZET6</h1>
+  <p class="small">Проєкт: STM32F407ZET6-MODUL-1. Мікросхема: <b>74LVC245A</b> (наприклад TI <b>SN74LVC245A</b>), корпус <b>PW (TSSOP-20)</b> або SOIC-20 — нумерація ніг однакова.</p>
+
+  <div class="diff">
+    <b>Не плутати з SN74LVC8T245</b> (24 ноги, дві шини <b>VCCA</b> і <b>VCCB</b>) — це інша деталь. У вас <b>74LVC245A</b>: <b>одне</b> живлення <b>VCC</b>, входи витримують до <b>5.5V</b>, виходи — рівні <b>3.3V</b> при <b>VCC = 3.3V</b>.
+  </div>
+
+  <div class="warn">
+    <b>Живлення енкодера 5V</b> підводять <b>напряму</b> до датчика (+5V і GND з DC-DC). Через 245 проходять лише сигнали <b>A</b> і <b>B</b>. На мікросхему подають лише <b>+3.3V</b> на <b>VCC (20)</b> і <b>GND (10)</b>.
+  </div>
+
+  <h2>1. Як це працює</h2>
+  <p>Енкодер видає імпульси <b>0 / 5V</b>. На вхід <b>A1…A4</b> (сторона «A») це дозволено: за даташитом TI входи приймають напругу до <b>5.5V</b> при <b>VCC = 1.65…3.6V</b>. Виходи на <b>B1…B4</b> дають <b>0 / 3.3V</b> для STM32.</p>
+  <div class="note">
+    <b>Режим (TI, табл. 1):</b> <code>OE = 0</code>, <code>DIR = 1</code> → передача <b>A → B</b> (енкодер на шині A, STM32 на шині B).
+  </div>
+
+  <h2>2. Розпіновка SN74LVC245A (20-pin, top view)</h2>
+  <p>За даташитом TI (DB, DW, PW, …):</p>
+  <table>
+    <tr><th>Нога</th><th>Сигнал</th><th>Нога</th><th>Сигнал</th></tr>
+    <tr><td>1</td><td><b>DIR</b></td><td>20</td><td><b>VCC</b></td></tr>
+    <tr><td>2</td><td>A1</td><td>19</td><td><b>OE</b> (output enable)</td></tr>
+    <tr><td>3</td><td>A2</td><td>18</td><td>B1</td></tr>
+    <tr><td>4</td><td>A3</td><td>17</td><td>B2</td></tr>
+    <tr><td>5</td><td>A4</td><td>16</td><td>B3</td></tr>
+    <tr><td>6</td><td>A5</td><td>15</td><td>B4</td></tr>
+    <tr><td>7</td><td>A6</td><td>14</td><td>B5</td></tr>
+    <tr><td>8</td><td>A7</td><td>13</td><td>B6</td></tr>
+    <tr><td>9</td><td>A8</td><td>12</td><td>B7</td></tr>
+    <tr><td>10</td><td><b>GND</b></td><td>11</td><td>B8</td></tr>
+  </table>
+  <p class="small">Пари каналів: A1↔B1 (ноги 2 і 18), A2↔B2 (3 і 17), A3↔B3 (4 і 16), A4↔B4 (5 і 15) тощо.</p>
+
+  <h2>3. Таблиця монтажу «енкодер — 245 — STM32»</h2>
+  <p>Прошивка: вісь X — <code>TIM2</code>: <b>PA0</b> = A, <b>PA1</b> = B. Вісь Z — <code>TIM3</code>: <b>PA6</b> = A, <b>PA7</b> = B.</p>
+  <table>
+    <tr>
+      <th>Джерело</th>
+      <th>Куди на 245</th>
+      <th>Нога</th>
+      <th>З 245 на STM32</th>
+      <th>Нога</th>
+      <th>Пін MCU</th>
+    </tr>
+    <tr>
+      <td>Енкодер X, канал A</td>
+      <td>A1</td>
+      <td>2</td>
+      <td>B1 → дріт</td>
+      <td>18</td>
+      <td><b>PA0</b></td>
+    </tr>
+    <tr>
+      <td>Енкодер X, канал B</td>
+      <td>A2</td>
+      <td>3</td>
+      <td>B2 →</td>
+      <td>17</td>
+      <td><b>PA1</b></td>
+    </tr>
+    <tr>
+      <td>Енкодер Z, канал A</td>
+      <td>A3</td>
+      <td>4</td>
+      <td>B3 →</td>
+      <td>16</td>
+      <td><b>PA6</b></td>
+    </tr>
+    <tr>
+      <td>Енкодер Z, канал B</td>
+      <td>A4</td>
+      <td>5</td>
+      <td>B4 →</td>
+      <td>15</td>
+      <td><b>PA7</b></td>
+    </tr>
+  </table>
+
+  <h2>4. Живлення та керування</h2>
+  <table>
+    <tr><th>Сигнал</th><th>Нога</th><th>Підключення</th></tr>
+    <tr><td>VCC</td><td>20</td><td><b>+3.3V</b> плати STM32</td></tr>
+    <tr><td>GND</td><td>10</td><td>Спільна земля з енкодерами, DC-DC, MCU</td></tr>
+    <tr><td>DIR</td><td>1</td><td><b>Лог. 1</b> (A → B): резистор <b>10k</b> від DIR до <b>+3.3V</b> або прямий дріт на +3.3V</td></tr>
+    <tr><td>OE</td><td>19</td><td><b>GND</b> — шина B активна (не Hi-Z). У даташиті для power-up інколи радять pull-up OE до VCC; для постійної роботи достатньо <b>OE = 0</b></td></tr>
+  </table>
+
+  <h2>5. Текстова схема</h2>
+  <div class="diagram">  +5V DC-DC ──────────── +5V на енкодери X і Z (окремі дроти, GND спільний)
+
+  +3.3V ──── VCC (20)     SN74LVC245A        GND (10) ─── GND плати
+              │
+              ├── DIR (1) ─── [10k] ─── +3.3V     режим A → B
+              ├── OE  (19) ─── GND
+              │
+  Енкодер X:  A ──► A1 (2)      B1 (18) ──► PA0
+              B ──► A2 (3)      B2 (17) ──► PA1
+
+  Енкодер Z:  A ──► A3 (4)      B3 (16) ──► PA6
+              B ──► A4 (5)      B4 (15) ──► PA7</div>
+
+  <h2>6. Невикористані входи A5…A8</h2>
+  <p>TI: усі невикористані <b>входи</b> підключити до <b>GND</b> або <b>VCC</b>. Заведіть <b>A5…A8</b> (ноги 6–9) на <b>GND</b>. Виходи <b>B5…B8</b> (ноги 14–11) тоді слідують за входами — <b>не</b> вішайте їх дротом на землю ззовні (це виходи МС).</p>
+
+  <h2>7. Декуплінг</h2>
+  <ul>
+    <li>Біля <b>VCC (20)</b> — кераміка <b>100nF</b> на GND (коротко).</li>
+    <li>Біля кожного енкодера: <b>100nF</b> + <b>10µF</b> між +5V і GND.</li>
+  </ul>
+
+  <h2>8. Кнопки обнулення (без 245)</h2>
+  <table>
+    <tr><th>Функція</th><th>Пін</th></tr>
+    <tr><td>Zero X</td><td><b>PB4</b></td></tr>
+    <tr><td>Zero Z</td><td><b>PB5</b></td></tr>
+  </table>
+
+  <h2>9. Покроково</h2>
+  <ol class="steps">
+    <li>З’єднати всі <b>GND</b> (DC-DC, енкодери, 245, STM32).</li>
+    <li>Подати <b>+3.3V</b> на <b>VCC (20)</b>, поставити <b>100nF</b> біля мікросхеми.</li>
+    <li><b>DIR (1)</b> → лог. 1 на 3.3V; <b>OE (19)</b> → GND.</li>
+    <li>Підключити чотири лінії енкодерів на <b>A1…A4</b> за таблицею §3.</li>
+    <li>Підключити <b>B1…B4</b> до <b>PA0, PA1, PA6, PA7</b>.</li>
+    <li><b>A5…A8</b> → GND.</li>
+    <li>Перевірити осцилографом: на PAx — меандр 0…3.3V при русі енкодера.</li>
+  </ol>
+
+  <h2>10. Напрямок лічильника</h2>
+  <p>Якщо «плюс/мінус» перепутані — поміняйте місцями дроти <b>A</b> і <b>B</b> тільки для цієї осі на входах <b>A1/A2</b> або <b>A3/A4</b>.</p>
+
+  <p class="small">Якщо на платі встановлено інший корпус або інший виробник — звірте ноги з його даташитом; логіка DIR/OE та пари A<sub>i</sub>/B<sub>i</sub> збігається з серією 74LVC245.</p>
+
+</body>
+</html>

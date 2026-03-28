@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Карта підключення LCD2004 I2C</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+    h1, h2, h3 { margin: 0 0 10px 0; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 16px; margin-top: 20px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    p, li { font-size: 12px; line-height: 1.45; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 16px 0; font-size: 12px; }
+    th, td { border: 1px solid #666; padding: 6px; vertical-align: top; }
+    th { background: #f0f0f0; text-align: left; }
+    .mono { font-family: Consolas, monospace; white-space: pre; font-size: 11px; line-height: 1.35; border: 1px solid #aaa; padding: 10px; }
+    .small { font-size: 11px; color: #333; }
+  </style>
+</head>
+<body>
+  <h1>Монтажна карта: LCD2004 I2C (PCF8574)</h1>
+  <p><b>Проєкт:</b> STM32F407ZET6-MODUL-1 (гілка Button)<br/>
+     <b>Лінії I2C у прошивці:</b> <code>PB10=SCL</code>, <code>PB11=SDA</code>, I2C2, 100 kHz.</p>
+
+  <h2>1. Рекомендований варіант живлення</h2>
+  <ul>
+    <li><b>LCD backpack живити від 5V</b>.</li>
+    <li>Між STM32 (3.3V) і LCD (5V) по I2C ставити <b>двонаправлений level shifter</b> (BSS138-модуль).</li>
+    <li>Земля обов'язково спільна: PSU 12V, DC-DC, STM32, LCD.</li>
+  </ul>
+
+  <h2>2. Клемна карта</h2>
+  <table>
+    <tr><th>Сигнал</th><th>Куди на STM32</th><th>Куди на LCD2004 I2C</th><th>Примітка</th></tr>
+    <tr><td>GND</td><td>GND_COMMON</td><td>GND</td><td>Спільна земля</td></tr>
+    <tr><td>VCC_LCD</td><td>+5V (DC-DC)</td><td>VCC</td><td>Рекомендовано 5V</td></tr>
+    <tr><td>SCL</td><td>PB10 (I2C2_SCL)</td><td>SCL</td><td>Через level shifter</td></tr>
+    <tr><td>SDA</td><td>PB11 (I2C2_SDA)</td><td>SDA</td><td>Через level shifter</td></tr>
+  </table>
+
+  <h2>3. Схема підключення (ASCII)</h2>
+  <div class="mono">STM32 side (3.3V)                 Level shifter (BSS138)                LCD2004 I2C side (5V)
+
++3.3V -------------------------- LV
+GND_COMMON --------------------- GND --------------------------------------- GND
+PB10 (SCL) --------------------- LV1      HV1 ------------------------------ SCL
+PB11 (SDA) --------------------- LV2      HV2 ------------------------------ SDA
+                                 HV -------------------- +5V --------------- VCC
+
+LCD VCC -> +5V
+LCD GND -> GND_COMMON</div>
+
+  <h2>4. Підтяжки I2C</h2>
+  <ul>
+    <li>На кожній стороні I2C має бути <b>одна</b> пара pull-up (типово 4.7k).</li>
+    <li>Якщо на модулі LCD вже є pull-up, додаткові можуть не знадобитися.</li>
+    <li>Не ставити багато паралельних pull-up на ту саму шину.</li>
+  </ul>
+
+  <h2>5. Налаштування в CubeMX</h2>
+  <ul>
+    <li><code>PB10/PB11</code>: Alternate Function I2C2, Open-Drain.</li>
+    <li>Швидкість I2C: 100 kHz (як у проєкті).</li>
+    <li>Внутрішні підтяжки на I2C не критичні при зовнішніх, але краще покладатися на апаратні pull-up шини.</li>
+  </ul>
+
+  <h2>6. Перший запуск / діагностика</h2>
+  <ol>
+    <li>Перевірити контраст потенціометром на backpack.</li>
+    <li>Перевірити адресу I2C: спочатку 0x27, якщо нема відповіді — 0x3F.</li>
+    <li>Якщо немає тексту: перевірити GND, SCL/SDA не переплутані, наявність level shifter.</li>
+  </ol>
+
+  <p class="small">Примітка: якщо конкретний модуль LCD стабільно працює від 3.3V, можна живити його від 3.3V і прибрати level shifter.</p>
+</body>
+</html>

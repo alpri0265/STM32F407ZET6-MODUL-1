@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Карта підключення кінцевиків (J12A3-4-Z/BX)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+    h1, h2, h3 { margin: 0 0 10px 0; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 16px; margin-top: 20px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    h3 { font-size: 14px; margin-top: 14px; }
+    p, li { font-size: 12px; line-height: 1.45; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 16px 0; font-size: 12px; }
+    th, td { border: 1px solid #666; padding: 6px; vertical-align: top; }
+    th { background: #f0f0f0; text-align: left; }
+    .mono { font-family: Consolas, monospace; white-space: pre; font-size: 11px; line-height: 1.35; border: 1px solid #aaa; padding: 10px; }
+    .small { font-size: 11px; color: #333; }
+  </style>
+</head>
+<body>
+  <h1>Монтажна карта: кінцевики J12A3-4-Z/BX (12V) через PC817</h1>
+  <p><b>Проєкт:</b> STM32F407ZET6-MODUL-1 (гілка Button)<br/>
+     <b>Важливо:</b> GND спільна між 12V, 5V, 3.3V та STM32.</p>
+
+  <h2>1. Клемна карта</h2>
+  <table>
+    <tr><th>Клема</th><th>Призначення</th><th>Підключення</th></tr>
+    <tr><td>X1.1</td><td>+12V IN</td><td>Від блоку живлення 12V</td></tr>
+    <tr><td>X1.2</td><td>GND IN</td><td>Від блоку живлення 12V</td></tr>
+    <tr><td>X1.3</td><td>+12V_SENS_BUS</td><td>Шина живлення датчиків (brown)</td></tr>
+    <tr><td>X1.4</td><td>GND_COMMON_BUS</td><td>Спільна земля: датчики + DC-DC + STM32</td></tr>
+  </table>
+
+  <table>
+    <tr><th>Клема X2</th><th>Сигнал</th><th>Куди</th></tr>
+    <tr><td>X2.1</td><td>X- brown</td><td>+12V_SENS_BUS</td></tr>
+    <tr><td>X2.2</td><td>X- blue</td><td>GND_COMMON_BUS</td></tr>
+    <tr><td>X2.3</td><td>X- black</td><td>CH1 IN (PC817_1 pin2 K)</td></tr>
+    <tr><td>X2.4</td><td>X+ brown</td><td>+12V_SENS_BUS</td></tr>
+    <tr><td>X2.5</td><td>X+ blue</td><td>GND_COMMON_BUS</td></tr>
+    <tr><td>X2.6</td><td>X+ black</td><td>CH2 IN (PC817_2 pin2 K)</td></tr>
+    <tr><td>X2.7</td><td>Z- brown</td><td>+12V_SENS_BUS</td></tr>
+    <tr><td>X2.8</td><td>Z- blue</td><td>GND_COMMON_BUS</td></tr>
+    <tr><td>X2.9</td><td>Z- black</td><td>CH3 IN (PC817_3 pin2 K)</td></tr>
+    <tr><td>X2.10</td><td>Z+ brown</td><td>+12V_SENS_BUS</td></tr>
+    <tr><td>X2.11</td><td>Z+ blue</td><td>GND_COMMON_BUS</td></tr>
+    <tr><td>X2.12</td><td>Z+ black</td><td>CH4 IN (PC817_4 pin2 K)</td></tr>
+  </table>
+
+  <table>
+    <tr><th>Клема X3</th><th>MCU</th><th>Функція</th></tr>
+    <tr><td>X3.1</td><td>PD4</td><td>LIM_X_NEG (CH1 OUT)</td></tr>
+    <tr><td>X3.2</td><td>PD5</td><td>LIM_X_POS (CH2 OUT)</td></tr>
+    <tr><td>X3.3</td><td>PD6</td><td>LIM_Z_NEG (CH3 OUT)</td></tr>
+    <tr><td>X3.4</td><td>PD7</td><td>LIM_Z_POS (CH4 OUT)</td></tr>
+    <tr><td>X3.5</td><td>+3.3V</td><td>Pull-up резистори 10k</td></tr>
+    <tr><td>X3.6</td><td>GND</td><td>GND_COMMON_BUS</td></tr>
+  </table>
+
+  <h2>2. Типовий канал (x4 однакові)</h2>
+  <ul>
+    <li><b>Rin:</b> 2.2k, 0.25W (від +12V на pin1 A PC817)</li>
+    <li><b>Pull-up:</b> 10k від PDx до +3.3V</li>
+    <li>PC817 pin3 (E) на GND, pin4 (C) на PDx</li>
+    <li>Логіка: при спрацюванні датчика вхід MCU переходить у LOW</li>
+  </ul>
+
+  <h3>Налаштування GPIO в CubeMX (важливо)</h3>
+  <ul>
+    <li>Для <b>PD4/PD5/PD6/PD7</b> при зовнішніх pull-up 10k встановити: <b>GPIO Pull = No pull-up and no pull-down</b>.</li>
+    <li>Внутрішню підтяжку потрібно <b>вимкнути</b>, бо зовнішня 10k вже формує стабільний HIGH.</li>
+    <li>Режим пінів залишити за проєктом (Input/EXTI), логіка спрацювання: <b>active LOW</b>.</li>
+  </ul>
+
+  <h2>3. Монтажна схема (ASCII)</h2>
+  <div class="mono">              +12V_SENS BUS
+                   |
+        +----------+----------+----------+----------+
+        |          |          |          |          |
+       R1         R2         R3         R4       (2.2k)
+        |          |          |          |
+     A PC1      A PC2      A PC3      A PC4
+      |          |          |          |
+K PC1-+--X-_OUT  +--X+_OUT  +--Z-_OUT  +--Z+_OUT   (black from sensors)
+
+Sensors:
+brown all -> +12V_SENS
+blue  all -> GND_COMMON
+
+MCU side:
+C PC1 -> PD4 ----[10k]---- +3.3V
+C PC2 -> PD5 ----[10k]---- +3.3V
+C PC3 -> PD6 ----[10k]---- +3.3V
+C PC4 -> PD7 ----[10k]---- +3.3V
+
+E PC1/2/3/4 -> GND_COMMON
+STM32 GND    -> GND_COMMON
+DC-DC GNDs   -> GND_COMMON</div>
+
+  <h2>4. Перевірка перед пуском</h2>
+  <ol>
+    <li>У спокої на PD4..PD7 має бути HIGH.</li>
+    <li>При спрацюванні відповідного датчика — LOW.</li>
+    <li>На PD4..PD7 не має потрапляти 12V напряму (тільки через PC817).</li>
+  </ol>
+
+  <h2>5. Додаткова інструкція</h2>
+  <p>Карта підключення LCD2004 I2C: <b>LCD2004_WIRING_CARD_UA.html</b> (і PDF-версія поруч).</p>
+
+  <h3>Потенціометр подачі (10k) — підключення ADC PA4</h3>
+  <ul>
+    <li>Край 1 потенціометра: <b>+3.3V</b></li>
+    <li>Край 2 потенціометра: <b>GND</b></li>
+    <li>Середній вивід (<b>wiper</b>): через <b>1k</b> на <b>PA4 (FEED_ADC)</b></li>
+    <li><b>100nF</b> ставити <b>після</b> резистора (з вузла PA4 на GND), максимально близько до STM32</li>
+    <li>Формула вузла: <code>wiper -> 1k -> PA4, PA4 -> 100nF -> GND</code></li>
+  </ul>
+
+  <h3>Кутовий аналоговий енкодер (живлення 5V) — підключення ADC PA5</h3>
+  <ul>
+    <li><b>Живлення енкодера:</b> від <b>DC-DC 5V</b>, земля спільна з STM32.</li>
+    <li><b>Декуплінг біля енкодера:</b> <b>100nF кераміка</b> + <b>10uF електроліт</b> паралельно між +5V та GND.</li>
+    <li><b>Вихід енкодера (0..5V) на PA5 через подільник:</b> Rtop=10k (OUT->вузол), Rbot=20k (вузол->GND), вузол = 0..3.3V.</li>
+    <li><b>Додатковий захист/фільтр ADC:</b> з вузла подільника через 1k на PA5, і 100nF з PA5 на GND (біля STM32).</li>
+    <li><b>Перевірка:</b> на PA5 напруга не повинна перевищувати 3.3V.</li>
+  </ul>
+
+  <h3>Лінійні інкрементальні енкодери (5V) через SN74LVC8T245</h3>
+  <p>Повна схема з’єднань, таблиця ніг (TSSOP-24 PW), покроковий монтаж і зауваження щодо невикористаних каналів — у окремому файлі: <b><a href="LINEAR_ENCODER_SN74LVC245_STM32_UA.html">LINEAR_ENCODER_SN74LVC245_STM32_UA.html</a></b>.</p>
+
+  <h3>DM556 (перевірений робочий варіант у проєкті)</h3>
+  <ul>
+    <li><b>Схема підключення:</b> common-anode.</li>
+    <li><b>PUL+ / DIR+ / ENA+</b> обох драйверів підключені до <b>+5V</b>.</li>
+    <li><b>PUL- / DIR- / ENA-</b> підключені до пінів STM32 (керування по «мінусу»).</li>
+    <li><b>Спільна земля обов'язкова:</b> GND STM32, GND драйверів, GND DC-DC.</li>
+    <li>Цей варіант уже використовувався для перевірки працездатності крокових двигунів у даному проєкті.</li>
+  </ul>
+
+  <p class="small">Документ сформовано для монтажу. За потреби додайте номерування клем під ваш конкретний клемник.</p>
+</body>
+</html>
