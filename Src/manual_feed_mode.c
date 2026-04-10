@@ -4,10 +4,12 @@
 #include "stm32f4xx_hal.h"
 #include <stdbool.h>
 
+#if MANUAL_FEED_USE_PENDANT_AXIS_SWITCH || MANUAL_FEED_USE_PENDANT_STEP_SWITCH
 static bool pend_line_low(GPIO_TypeDef *port, uint16_t pin)
 {
     return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_RESET;
 }
+#endif
 
 #if MANUAL_FEED_USE_PENDANT_AXIS_SWITCH
 /* Усі лінії осей відпущені (підтяжка HIGH) = позиція OFF на пульті = AUTO. */

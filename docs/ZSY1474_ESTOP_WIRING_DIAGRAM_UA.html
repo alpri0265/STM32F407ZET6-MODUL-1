@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Схема: стоп пульта ZSY1474 → PE0 (STM32)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; color: #111; max-width: 720px; }
+    h1 { font-size: 18px; }
+    p, li { font-size: 14px; line-height: 1.5; }
+    svg { display: block; margin: 16px 0; border: 1px solid #ccc; background: #fafafa; }
+    .note { background: #eef6ff; padding: 12px 14px; margin: 16px 0; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<h1>Як підключити аварійний стоп з пульта (C / CN) до STM32 PE0</h1>
+
+<p>У проєкті <b>E_STOP = PE0</b>: внутрішня <b>підтяжка вгору</b> до 3,3&nbsp;V. Поки ланцюг <b>PE0 → GND</b> <b>замкнений</b> — на піні <b>LOW</b> (норма). Якщо <b>будь-який</b> NC розімкнений — <b>HIGH</b> → стоп (як у прошивці з <code>ESTOP_ACTIVE_HIGH</code>).</p>
+
+<p><b>Дроти пульта:</b> світло-блакитний <b>C</b> і чорний/світло-блакитний <b>CN</b> — пара контактів <b>NC</b> (нормально замкнені: стоп не натиснутий = контакт проводить).</p>
+
+<div class="note">
+  Нижче: один варіант підключення. Поряд контактів у серії довільний: головне — <b>один</b> суцільний шлях від PE0 до GND через усі NC.
+</div>
+
+<!-- SVG: STM32 PE0, pullup, series NC, GND -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 320" font-family="Arial,sans-serif" font-size="13">
+  <title>Схема NC-ланцюга стопу</title>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#333"/>
+    </marker>
+  </defs>
+
+  <!-- 3.3V and pull-up symbol -->
+  <text x="20" y="28" font-weight="bold">+3.3 V (всередині MCU)</text>
+  <line x1="120" y1="50" x2="120" y2="75" stroke="#333" stroke-width="2"/>
+  <path d="M 105 75 L 135 75 L 120 95 Z" fill="none" stroke="#333" stroke-width="2"/>
+  <text x="140" y="88" font-size="11">внутрішня</text>
+  <text x="140" y="102" font-size="11">підтяжка</text>
+
+  <!-- Node PE0 -->
+  <line x1="120" y1="95" x2="120" y2="130" stroke="#333" stroke-width="2"/>
+  <circle cx="120" cy="130" r="5" fill="#1a5fb4"/>
+  <text x="130" y="135" font-weight="bold">PE0</text>
+  <text x="130" y="150" font-size="11">(E_STOP)</text>
+
+  <!-- Wire to NC chain -->
+  <line x1="120" y1="130" x2="120" y2="165" stroke="#333" stroke-width="2"/>
+  <line x1="120" y1="165" x2="200" y2="165" stroke="#333" stroke-width="2"/>
+
+  <!-- Panel NC (optional) box -->
+  <rect x="200" y="140" width="120" height="50" fill="#fff" stroke="#333" stroke-width="2" rx="4"/>
+  <text x="210" y="162" font-size="11">Панельний стоп</text>
+  <text x="210" y="178" font-size="11" fill="#666">NC (за наявності)</text>
+
+  <line x1="320" y1="165" x2="360" y2="165" stroke="#333" stroke-width="2"/>
+
+  <!-- Pendant NC C-CN -->
+  <rect x="360" y="140" width="140" height="50" fill="#e8f4e8" stroke="#1a7f37" stroke-width="2" rx="4"/>
+  <text x="370" y="162" font-weight="bold">Пульт ZSY1474</text>
+  <text x="370" y="178" font-size="11">NC: C — CN</text>
+
+  <line x1="500" y1="165" x2="520" y2="165" stroke="#333" stroke-width="2"/>
+  <line x1="520" y1="165" x2="520" y2="220" stroke="#333" stroke-width="2"/>
+
+  <!-- GND symbol -->
+  <line x1="500" y1="220" x2="540" y2="220" stroke="#333" stroke-width="2"/>
+  <line x1="505" y1="228" x2="535" y2="228" stroke="#333" stroke-width="2"/>
+  <line x1="510" y1="236" x2="530" y2="236" stroke="#333" stroke-width="2"/>
+  <line x1="515" y1="244" x2="525" y2="244" stroke="#333" stroke-width="2"/>
+  <text x="448" y="238" font-weight="bold">GND</text>
+  <text x="448" y="254" font-size="11">(0 V плати = чорний пульта)</text>
+
+  <!-- STM32 box -->
+  <rect x="15" y="115" width="100" height="70" fill="#f0f4ff" stroke="#1a5fb4" stroke-width="2" rx="6"/>
+  <text x="25" y="145" font-size="12" font-weight="bold">STM32</text>
+  <text x="25" y="162" font-size="11">F407</text>
+
+  <!-- Legend dashed: when pressed NC opens -->
+  <text x="20" y="285" font-size="12" fill="#333">Норма: усі NC замкнені → струм через ланцюг → PE0 ≈ 0 V (LOW).</text>
+  <text x="20" y="302" font-size="12" fill="#c00">Стоп натиснутий: NC розімкнувся → PE0 підтягується вгору → HIGH → аварія в прошивці.</text>
+</svg>
+
+<h2>Текстова схема (те саме)</h2>
+<pre style="background:#f5f5f5;padding:12px;font-size:13px;line-height:1.4;">
+        +3.3 V
+          |
+      [ підтяжка всередині MCU ]
+          |
+        PE0 (E_STOP)
+          |
+          +----[ NC панельний стоп ]----(опційно)----+
+          |                                         |
+          +----[ NC пульта: C — CN ]----------------+
+                                                    |
+                                                  GND
+     (спільний з 0 V живлення пульта та плати)
+</pre>
+
+<div class="note">
+  <b>Не подавайте на PE0 24 V.</b> Лише «сухий контакт» NC між PE0 і GND.<br/>
+  Якщо полярність у вас зворотна — у <code>Inc/board.h</code> змініть <code>ESTOP_ACTIVE_HIGH</code>.
+</div>
+
+<p><a href="ZSY1474_MPG_PENDANT_WIRING_UA.html">Повна інструкція пульта</a></p>
+
+</body>
+</html>

@@ -347,9 +347,10 @@ static void render_info_adc_fault(void)
     unsigned int enc_d = (unsigned int)enc_deg_f;
     unsigned int enc_t = (unsigned int)(enc_deg_f * 10.0f) % 10u;
     uint16_t fault = fault_get();
-    char buf[LINE_LEN + 4];
+    /* +8: snprintf "Feed raw: " + 5 цифр %u + вирівнювання без упередження -Wformat-truncation */
+    char buf[LINE_LEN + 8];
     lcd_print_line(0, "ADC / Fault            ");
-    (void)snprintf(buf, sizeof(buf), "Feed raw: %u         ", (unsigned)feed_raw);
+    (void)snprintf(buf, sizeof(buf), "Feed raw: %-5u       ", (unsigned)feed_raw);
     buf[LINE_LEN] = '\0';
     lcd_print_line(1, buf);
     (void)snprintf(buf, sizeof(buf), "Enc: %u.%u %c          ", enc_d, enc_t, 0xFF);

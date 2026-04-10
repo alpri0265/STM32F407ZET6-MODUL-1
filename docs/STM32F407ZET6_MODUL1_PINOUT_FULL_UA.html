@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Повна розпіновка STM32F407ZET6-MODUL-1</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; color: #111; max-width: 1000px; line-height: 1.45; }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    h2 { font-size: 16px; margin-top: 22px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    p, li { font-size: 13px; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 18px 0; font-size: 11px; }
+    th, td { border: 1px solid #666; padding: 6px 8px; vertical-align: top; }
+    table.wide-detail th { font-size: 10px; }
+    table.wide-detail td:nth-child(1) { white-space: nowrap; }
+    th { background: #eee; text-align: left; }
+    .port { font-weight: bold; background: #f5f5f5; }
+    code { font-family: Consolas, monospace; font-size: 11px; background: #f0f0f0; padding: 1px 4px; }
+    .warn { background: #fff8e6; border-left: 4px solid #e6a800; padding: 10px 14px; margin: 14px 0; font-size: 12px; }
+    .small { font-size: 11px; color: #444; }
+  </style>
+</head>
+<body>
+
+<h1>Повна розпіновка проєкту STM32F407ZET6-MODUL-1</h1>
+<p><b>Джерело:</b> <code>Inc/main.h</code> (символи CubeMX), <code>Inc/board.h</code> (пульт ZSY1474), ініціалізація <code>Src/main.c</code>.<br/>
+<b>МК:</b> STM32F407ZET6. Документ описує <b>основну</b> гілку з каталогу <code>Src/</code>; файл <code>Core/Inc/main.h</code> майже збігається (порядок #define може відрізнятися).</p>
+
+<div class="warn">
+  <b>Конфлікт пінів:</b> якщо увімкнено <code>MANUAL_FEED_USE_PENDANT_AXIS_SWITCH</code> і <code>MANUAL_FEED_PENDANT_AXIS_NEED_Y4&nbsp;!=&nbsp;0</code> у <code>board.h</code>, піни <b>PA2</b> і <b>PA3</b> стають входами осей пульта <b>Y / 4</b> — функції <b>TEMP_ADC</b> та <b>SPINDLE_PWM</b> на цих ногах у такій конфігурації не використовуються.
+</div>
+<p class="note" style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:10px 14px;margin:12px 0;font-size:13px;">
+  <b>PA2 / PA3 не обов’язкові.</b> Якщо дроти пульта <b>Y</b> і <b>4</b> ви <b>не підключаєте</b>, у <code>Inc/board.h</code> задайте <code>#define MANUAL_FEED_PENDANT_AXIS_NEED_Y4&nbsp;0</code> (при увімкненому <code>MANUAL_FEED_USE_PENDANT_AXIS_SWITCH</code>). Тоді прошивка не очікує сигналів на PA2/PA3: ці піни можна залишити вільними для інших функцій (TEMP_ADC, SPINDLE_PWM за Cube) або фізично не розводити. На пульті не ставте перемикач осі в положення Y чи 4.
+</p>
+
+<h2>1. Порт PA</h2>
+<table>
+  <tr><th>Пін</th><th>Символ у коді</th><th>Призначення</th></tr>
+  <tr><td>PA0</td><td><code>ENC_X_A</code></td><td>Лінійний енкодер вісь X, канал A (TIM2, encoder)</td></tr>
+  <tr><td>PA1</td><td><code>ENC_X_B</code></td><td>Лінійний енкодер вісь X, канал B</td></tr>
+  <tr><td>PA2</td><td><code>TEMP_ADC</code> / <code>PENDAXIS_Y</code></td><td>ADC температура (Cube) <b>або</b> вісь Y пульта, якщо <code>MANUAL_FEED_PENDANT_AXIS_NEED_Y4</code> увімкнено. <b>Якщо Y не підключаєте</b> — <code>NEED_Y4&nbsp;0</code> у <code>board.h</code>; дріт пульта не проводьте, PA2 може лишитись під TEMP.</td></tr>
+  <tr><td>PA3</td><td><code>SPINDLE_PWM</code> / <code>PENDAXIS_4</code></td><td>PWM шпиндель <b>або</b> вісь 4 пульта за тією ж умовою. <b>Без дроту «4»</b> — <code>NEED_Y4&nbsp;0</code>; PA3 може лишитись під PWM.</td></tr>
+  <tr><td>PA4</td><td><code>FEED_ADC</code></td><td>ADC: корекція подачі (override)</td></tr>
+  <tr><td>PA5</td><td><code>TOOL_ANGLE_ADC</code></td><td>ADC: кут інструменту (абсолютний енкодер 0…360°)</td></tr>
+  <tr><td>PA6</td><td><code>ENC_Z_A</code></td><td>Лінійний енкодер вісь Z, канал A (TIM3)</td></tr>
+  <tr><td>PA7</td><td><code>ENC_Z_B</code></td><td>Лінійний енкодер вісь Z, канал B</td></tr>
+  <tr><td>PA8</td><td><code>X_STEP</code></td><td>Кроковий драйвер вісь X — STEP/PUL (AF TIM1)</td></tr>
+  <tr><td>PA9</td><td><code>X_DIR</code></td><td>Кроковий драйвер вісь X — DIR</td></tr>
+  <tr><td>PA10</td><td><code>X_EN</code></td><td>Кроковий драйвер вісь X — ENA/ENABLE</td></tr>
+</table>
+
+<h2>2. Порт PB</h2>
+<table>
+  <tr><th>Пін</th><th>Символ</th><th>Призначення</th></tr>
+  <tr><td>PB4</td><td><code>LIN_ZERO_X</code></td><td>Кнопка / сигнал обнулення лінійного енкодера X</td></tr>
+  <tr><td>PB5</td><td><code>LIN_ZERO_Z</code></td><td>Обнулення лінійного енкодера Z</td></tr>
+  <tr><td>PB6</td><td><code>z_STEP</code></td><td>Кроковий драйвер вісь Z — STEP/PUL (AF TIM4)</td></tr>
+  <tr><td>PB7</td><td><code>Z_DIR</code></td><td>Вісь Z — DIR</td></tr>
+  <tr><td>PB8</td><td><code>Z_EN</code></td><td>Вісь Z — ENA/ENABLE</td></tr>
+  <tr><td>PB10</td><td><code>I2C2_SCL</code></td><td>I2C2 SCL — LCD 2004 (та інше на шині)</td></tr>
+  <tr><td>PB11</td><td><code>I2C2_SDA</code></td><td>I2C2 SDA</td></tr>
+  <tr><td>PB12</td><td><code>MPG_A</code></td><td>Ручний MPG / енкодер RE60, фаза A</td></tr>
+  <tr><td>PB13</td><td><code>MPG_B</code></td><td>MPG, фаза B</td></tr>
+  <tr><td>PB14</td><td><code>MPG_BTN</code></td><td>Кнопка на ручці MPG / енкодері</td></tr>
+</table>
+
+<h2>3. Порт PC</h2>
+<table>
+  <tr><th>Пін</th><th>Символ</th><th>Призначення</th></tr>
+  <tr><td>PC0</td><td><code>SCALE_0</code></td><td>Вхід (Rapid / масштаб — за проєктом на jog)</td></tr>
+  <tr><td>PC1</td><td><code>SCA</code></td><td>Вхід SCA</td></tr>
+  <tr><td>PC2</td><td><code>JOY_UP</code></td><td>Джойстик вгору</td></tr>
+  <tr><td>PC3</td><td><code>JOY_DOWN</code></td><td>Джойстик вниз</td></tr>
+  <tr><td>PC4</td><td><code>JOY_LEFT</code></td><td>Джойстик вліво</td></tr>
+  <tr><td>PC5</td><td><code>JOY_RIGHT</code></td><td>Джойстик вправо</td></tr>
+  <tr><td>PC7</td><td><code>SL_X_NEG_BIT</code></td><td>Програмні ліміти: кнопка / біт X−</td></tr>
+  <tr><td>PC8</td><td><code>SL_X_POS_BIT</code></td><td>Програмні ліміти: X+</td></tr>
+  <tr><td>PC9</td><td><code>SL_Z_NEG_BIT</code></td><td>Програмні ліміти: Z−</td></tr>
+  <tr><td>PC10</td><td><code>SL_Z_POS_BIT</code></td><td>Програмні ліміти: Z+</td></tr>
+  <tr><td>PC11</td><td><code>MODE_AXIS</code></td><td>Режим / вісь (вихід GPIO за проєктом)</td></tr>
+</table>
+
+<h2>4. Порт PD</h2>
+<table>
+  <tr><th>Пін</th><th>Символ</th><th>Призначення</th></tr>
+  <tr><td>PD0</td><td><code>SL_X_NEG_LED</code></td><td>LED індикація програмного ліміту X−</td></tr>
+  <tr><td>PD1</td><td><code>SL_X_POS_LED</code></td><td>LED X+</td></tr>
+  <tr><td>PD2</td><td><code>SL_Z_NEG_LED</code></td><td>LED Z−</td></tr>
+  <tr><td>PD3</td><td><code>SL_Z_POS_LED</code></td><td>LED Z+</td></tr>
+  <tr><td>PD4</td><td><code>LIM_X_NEG</code></td><td>Апаратний кінцевик / ліміт X−</td></tr>
+  <tr><td>PD5</td><td><code>LIM_X_POS</code></td><td>Ліміт X+</td></tr>
+  <tr><td>PD6</td><td><code>LIM_Z_NEG</code></td><td>Ліміт Z−</td></tr>
+  <tr><td>PD7</td><td><code>LIM_Z_POS</code></td><td>Ліміт Z+</td></tr>
+  <tr><td>PD8</td><td><code>MENU_UP</code></td><td>Кнопка меню вгору</td></tr>
+  <tr><td>PD9</td><td><code>MENU_DOWN</code></td><td>Кнопка меню вниз</td></tr>
+  <tr><td>PD10</td><td><code>MENU_ENTER</code></td><td>Кнопка меню Enter</td></tr>
+</table>
+
+<h2>5. Порт PE</h2>
+<table>
+  <tr><th>Пін</th><th>Символ</th><th>Призначення</th></tr>
+  <tr><td>PE0</td><td><code>E_STOP</code></td><td>Аварійний стоп (EXTI0, підтяжка; NC-ланцюг на GND)</td></tr>
+  <tr><td>PE1</td><td><code>FAULT_IN</code></td><td>Вхід аварії від драйвера (за схемою)</td></tr>
+  <tr><td>PE2</td><td><code>FEED_MODE</code></td><td>Режим подачі AUTO/MANUAL (якщо пульт не на ENC_*; див. <code>board.h</code>)</td></tr>
+  <tr><td>PE3</td><td><code>ENC_AXIS_S1</code></td><td>Вибір осі енкодера / пульт: вісь X (жовтий дріт ZSY1474)</td></tr>
+  <tr><td>PE4</td><td><code>ENC_AXIS_S2</code></td><td>Вісь Z пульта (коричневий)</td></tr>
+  <tr><td>PE5</td><td><code>ENC_STEP_S1</code> / <code>PENDSTEP_X1</code></td><td>Масштаб кроку: 0,001 мм / X1 пульта</td></tr>
+  <tr><td>PE6</td><td><code>ENC_STEP_S2</code> / <code>PENDSTEP_X10</code></td><td>0,01 мм / X10</td></tr>
+  <tr><td>PE7</td><td><code>PENDSTEP_X100</code></td><td>0,1 мм / X100 пульта — ініціалізується лише якщо <code>MANUAL_FEED_USE_PENDANT_STEP_SWITCH</code> у <code>board.h</code> (немає окремого #define в <code>main.h</code>)</td></tr>
+  <tr><td>PE8</td><td><code>SPINDLE_ON</code></td><td>Увімкнення шпинделя (GPIO)</td></tr>
+</table>
+
+<h2>6. Розгорнута таблиця за функціями (кожен пін окремо)</h2>
+<p class="small">Колонка <b>I/O</b>: напрям відносно МК. <b>Активний рівень</b> — як трактує прошивка або схема кнопки (уточнюйте у коді).</p>
+
+<table class="wide-detail">
+  <tr>
+    <th>Група</th>
+    <th>Пін</th>
+    <th>Символ (<code>main.h</code>)</th>
+    <th>I/O</th>
+    <th>Режим / AF</th>
+    <th>Монтаж і логіка</th>
+    <th>Периферія / код</th>
+  </tr>
+  <tr><td colspan="7" class="port">Крокові двигуни — вісь X (DM556 / аналог)</td></tr>
+  <tr>
+    <td>Крокові X</td>
+    <td>PA8</td>
+    <td><code>X_STEP</code></td>
+    <td>Вихід</td>
+    <td>AF: TIM1 CH1 (у bringup може бути GPIO «імпульс кроку»)</td>
+    <td>До входу PUL/STEP драйвера X; узгодити активний рівень імпульсу з даташитом драйвера.</td>
+    <td><code>jog.c</code>, TIM1; крок у ручному/авто режимах</td>
+  </tr>
+  <tr>
+    <td>Крокові X</td>
+    <td>PA9</td>
+    <td><code>X_DIR</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>Напрямок кроків X на драйвер.</td>
+    <td><code>jog.c</code></td>
+  </tr>
+  <tr>
+    <td>Крокові X</td>
+    <td>PA10</td>
+    <td><code>X_EN</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>Enable драйвера; у проєкті типово <code>ENA_ACTIVE_HIGH</code> у jog — HIGH = драйвер увімкнений.</td>
+    <td><code>jog.c</code>, вимкнення при помилці / не READY</td>
+  </tr>
+  <tr><td colspan="7" class="port">Крокові двигуни — вісь Z</td></tr>
+  <tr>
+    <td>Крокові Z</td>
+    <td>PB6</td>
+    <td><code>z_STEP</code></td>
+    <td>Вихід</td>
+    <td>AF: TIM4 CH1</td>
+    <td>PUL/STEP драйвера Z.</td>
+    <td>TIM4, <code>jog.c</code></td>
+  </tr>
+  <tr>
+    <td>Крокові Z</td>
+    <td>PB7</td>
+    <td><code>Z_DIR</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>DIR для Z.</td>
+    <td><code>jog.c</code></td>
+  </tr>
+  <tr>
+    <td>Крокові Z</td>
+    <td>PB8</td>
+    <td><code>Z_EN</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>ENA Z; та сама полярність, що й для X_EN.</td>
+    <td><code>jog.c</code></td>
+  </tr>
+  <tr><td colspan="7" class="port">Лінійні енкодери (позиція X / Z)</td></tr>
+  <tr>
+    <td>Лін. енкодер X</td>
+    <td>PA0</td>
+    <td><code>ENC_X_A</code></td>
+    <td>Вхід</td>
+    <td>AF: TIM2 CH1, encoder mode</td>
+    <td>Канал A лінійки X; рівні 3,3&nbsp;V після буфера/245, якщо датчик 5&nbsp;V.</td>
+    <td>TIM2, <code>linear_encoders_init</code>, <code>axis_feedback</code></td>
+  </tr>
+  <tr>
+    <td>Лін. енкодер X</td>
+    <td>PA1</td>
+    <td><code>ENC_X_B</code></td>
+    <td>Вхід</td>
+    <td>AF: TIM2 CH2</td>
+    <td>Канал B лінійки X.</td>
+    <td>TIM2</td>
+  </tr>
+  <tr>
+    <td>Лін. енкодер Z</td>
+    <td>PA6</td>
+    <td><code>ENC_Z_A</code></td>
+    <td>Вхід</td>
+    <td>AF: TIM3 CH1</td>
+    <td>Канал A лінійки Z.</td>
+    <td>TIM3</td>
+  </tr>
+  <tr>
+    <td>Лін. енкодер Z</td>
+    <td>PA7</td>
+    <td><code>ENC_Z_B</code></td>
+    <td>Вхід</td>
+    <td>AF: TIM3 CH2</td>
+    <td>Канал B лінійки Z.</td>
+    <td>TIM3</td>
+  </tr>
+  <tr><td colspan="7" class="port">Обнулення лічильника лінійних енкодерів</td></tr>
+  <tr>
+    <td>Lin zero</td>
+    <td>PB4</td>
+    <td><code>LIN_ZERO_X</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Кнопка або контакт «нуль X» до GND (активний рівень за схемою).</td>
+    <td><code>linenc_zero_buttons.h</code> / обробка в додатку</td>
+  </tr>
+  <tr>
+    <td>Lin zero</td>
+    <td>PB5</td>
+    <td><code>LIN_ZERO_Z</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Нуль Z.</td>
+    <td>Те саме</td>
+  </tr>
+  <tr><td colspan="7" class="port">Ручний MPG (енкодер на пульті або RE60)</td></tr>
+  <tr>
+    <td>MPG</td>
+    <td>PB12</td>
+    <td><code>MPG_A</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up; опційно через SN74LVC245 з 5&nbsp;V пульта</td>
+    <td>Фаза A квадратури; для лінійного драйвера пульта див. мануал T1/T2/L.</td>
+    <td><code>jog.c</code> (ручний MPG), EXTI у <code>main.c</code> для опитування</td>
+  </tr>
+  <tr>
+    <td>MPG</td>
+    <td>PB13</td>
+    <td><code>MPG_B</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Фаза B.</td>
+    <td><code>jog.c</code></td>
+  </tr>
+  <tr>
+    <td>MPG</td>
+    <td>PB14</td>
+    <td><code>MPG_BTN</code></td>
+    <td>Вхід</td>
+    <td>GPIO input</td>
+    <td>Кнопка на ручці; логіка залежить від схеми (у фрагменті jog — перевірка рівня).</td>
+    <td><code>jog.c</code> (режим кнопок меню якщо не джойстик)</td>
+  </tr>
+  <tr><td colspan="7" class="port">Аналогові входи (ADC1)</td></tr>
+  <tr>
+    <td>ADC</td>
+    <td>PA2</td>
+    <td><code>TEMP_ADC</code></td>
+    <td>Вхід</td>
+    <td>Analog / ADC</td>
+    <td>За замовчуванням ADC. Для осі Y пульта лише якщо <code>MANUAL_FEED_PENDANT_AXIS_NEED_Y4</code> увімкнено. <b>Без дроту Y:</b> задайте <code>NEED_Y4&nbsp;0</code> — PA2 не потрібен для пульта.</td>
+    <td><code>MX_ADC1_Init</code>, або <code>manual_feed_mode.c</code></td>
+  </tr>
+  <tr>
+    <td>ADC</td>
+    <td>PA4</td>
+    <td><code>FEED_ADC</code></td>
+    <td>Вхід</td>
+    <td>Analog</td>
+    <td>Потенціометр корекції подачі 0…3,3&nbsp;V (або делитель).</td>
+    <td><code>adc_if.c</code>, <code>board.h</code> <code>ADC_CH_FEED_OVERRIDE</code></td>
+  </tr>
+  <tr>
+    <td>ADC</td>
+    <td>PA5</td>
+    <td><code>TOOL_ANGLE_ADC</code></td>
+    <td>Вхід</td>
+    <td>Analog</td>
+    <td>Напруга пропорційна куту інструменту (0…360°).</td>
+    <td><code>ADC_CH_TOOL_ANGLE</code>, калібрування кута</td>
+  </tr>
+  <tr><td colspan="7" class="port">Шпиндель</td></tr>
+  <tr>
+    <td>Шпиндель</td>
+    <td>PA3</td>
+    <td><code>SPINDLE_PWM</code></td>
+    <td>Вихід</td>
+    <td>AF: таймер (PWM) у Cube</td>
+    <td>PWM шпинделя (Cube). Вісь 4 пульта лише при <code>NEED_Y4</code>. <b>Без дроту 4:</b> <code>NEED_Y4&nbsp;0</code> — PA3 для пульта не потрібен.</td>
+    <td>За конфігурацією Cube / користувацький код</td>
+  </tr>
+  <tr>
+    <td>Шпиндель</td>
+    <td>PE8</td>
+    <td><code>SPINDLE_ON</code></td>
+    <td>Вихід</td>
+    <td>GPIO output</td>
+    <td>Реле/транзистор «увімкнути шпиндель».</td>
+    <td>За проєктом на GPIOE</td>
+  </tr>
+  <tr><td colspan="7" class="port">I2C2 — дисплей LCD 2004 та периферія на шині</td></tr>
+  <tr>
+    <td>I2C2</td>
+    <td>PB10</td>
+    <td><code>I2C2_SCL</code></td>
+    <td>I/O</td>
+    <td>AF: I2C2_SCL, open-drain</td>
+    <td>Зовнішні pull-up 4,7…10&nbsp;kΩ на 3,3&nbsp;V (типово для I2C).</td>
+    <td>HAL I2C2, <code>board.h</code> LCD</td>
+  </tr>
+  <tr>
+    <td>I2C2</td>
+    <td>PB11</td>
+    <td><code>I2C2_SDA</code></td>
+    <td>I/O</td>
+    <td>AF: I2C2_SDA</td>
+    <td>Те саме.</td>
+    <td>LCD та інші пристрої на шині</td>
+  </tr>
+  <tr><td colspan="7" class="port">Джойстик (ручне керування напрямком)</td></tr>
+  <tr>
+    <td>Джойстик</td>
+    <td>PC2</td>
+    <td><code>JOY_UP</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Натиснуто = зазвичай контакт на GND (active low у <code>jog.c</code>).</td>
+    <td><code>jog.c</code> <code>joy_up()</code></td>
+  </tr>
+  <tr>
+    <td>Джойстик</td>
+    <td>PC3</td>
+    <td><code>JOY_DOWN</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Вниз.</td>
+    <td><code>joy_down()</code></td>
+  </tr>
+  <tr>
+    <td>Джойстик</td>
+    <td>PC4</td>
+    <td><code>JOY_LEFT</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Вліво (−X у jog).</td>
+    <td><code>joy_left()</code></td>
+  </tr>
+  <tr>
+    <td>Джойстик</td>
+    <td>PC5</td>
+    <td><code>JOY_RIGHT</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Вправо (+X).</td>
+    <td><code>joy_right()</code></td>
+  </tr>
+  <tr><td colspan="7" class="port">Кнопки меню (окремо від енкодера RE60)</td></tr>
+  <tr>
+    <td>Меню</td>
+    <td>PD8</td>
+    <td><code>MENU_UP</code></td>
+    <td>Вхід</td>
+    <td>GPIO EXTI / input, pull-up</td>
+    <td>Вгору по меню.</td>
+    <td><code>events.c</code>, <code>menu.c</code></td>
+  </tr>
+  <tr>
+    <td>Меню</td>
+    <td>PD9</td>
+    <td><code>MENU_DOWN</code></td>
+    <td>Вхід</td>
+    <td>GPIO EXTI</td>
+    <td>Вниз.</td>
+    <td>Те саме</td>
+  </tr>
+  <tr>
+    <td>Меню</td>
+    <td>PD10</td>
+    <td><code>MENU_ENTER</code></td>
+    <td>Вхід</td>
+    <td>GPIO EXTI</td>
+    <td>Підтвердження / вхід у пункт.</td>
+    <td>Те саме</td>
+  </tr>
+  <tr><td colspan="7" class="port">Програмні ліміти (SL) — навчання та індикація</td></tr>
+  <tr>
+    <td>SL кнопки</td>
+    <td>PC7</td>
+    <td><code>SL_X_NEG_BIT</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Навчання/біт межі X− (натиснуто → GND).</td>
+    <td><code>sl_limits.c</code></td>
+  </tr>
+  <tr>
+    <td>SL кнопки</td>
+    <td>PC8</td>
+    <td><code>SL_X_POS_BIT</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>X+.</td>
+    <td><code>sl_limits.c</code></td>
+  </tr>
+  <tr>
+    <td>SL кнопки</td>
+    <td>PC9</td>
+    <td><code>SL_Z_NEG_BIT</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Z−.</td>
+    <td><code>sl_limits.c</code></td>
+  </tr>
+  <tr>
+    <td>SL кнопки</td>
+    <td>PC10</td>
+    <td><code>SL_Z_POS_BIT</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Z+.</td>
+    <td><code>sl_limits.c</code></td>
+  </tr>
+  <tr>
+    <td>SL LED</td>
+    <td>PD0</td>
+    <td><code>SL_X_NEG_LED</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>LED через резистор: анод на пін або катод на GND за схемою плати.</td>
+    <td><code>sl_limits.c</code> <code>led_write</code></td>
+  </tr>
+  <tr>
+    <td>SL LED</td>
+    <td>PD1</td>
+    <td><code>SL_X_POS_LED</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>Індикація X+.</td>
+    <td><code>sl_limits.c</code></td>
+  </tr>
+  <tr>
+    <td>SL LED</td>
+    <td>PD2</td>
+    <td><code>SL_Z_NEG_LED</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>Z−.</td>
+    <td><code>sl_limits.c</code></td>
+  </tr>
+  <tr>
+    <td>SL LED</td>
+    <td>PD3</td>
+    <td><code>SL_Z_POS_LED</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>Z+.</td>
+    <td><code>sl_limits.c</code></td>
+  </tr>
+  <tr>
+    <td>Режим вісі</td>
+    <td>PC11</td>
+    <td><code>MODE_AXIS</code></td>
+    <td>Вихід</td>
+    <td>GPIO output PP</td>
+    <td>Керування зовнішньою логікою вибору осі (за схемою).</td>
+    <td>Cube / користувацький код</td>
+  </tr>
+  <tr><td colspan="7" class="port">Апаратні кінцевики (ліміти станка)</td></tr>
+  <tr>
+    <td>Ліміти</td>
+    <td>PD4</td>
+    <td><code>LIM_X_NEG</code></td>
+    <td>Вхід</td>
+    <td>GPIO input (EXTI за проєктом)</td>
+    <td>Кінцевик X−; логіка залежить від оптопари/12&nbsp;V схеми (див. карту кінцевиків).</td>
+    <td>Обробка лімітів у додатку</td>
+  </tr>
+  <tr>
+    <td>Ліміти</td>
+    <td>PD5</td>
+    <td><code>LIM_X_POS</code></td>
+    <td>Вхід</td>
+    <td>GPIO input</td>
+    <td>X+.</td>
+    <td>Те саме</td>
+  </tr>
+  <tr>
+    <td>Ліміти</td>
+    <td>PD6</td>
+    <td><code>LIM_Z_NEG</code></td>
+    <td>Вхід</td>
+    <td>GPIO input</td>
+    <td>Z−.</td>
+    <td>Те саме</td>
+  </tr>
+  <tr>
+    <td>Ліміти</td>
+    <td>PD7</td>
+    <td><code>LIM_Z_POS</code></td>
+    <td>Вхід</td>
+    <td>GPIO input</td>
+    <td>Z+.</td>
+    <td>Те саме</td>
+  </tr>
+  <tr><td colspan="7" class="port">Додаткові входи панелі</td></tr>
+  <tr>
+    <td>Панель</td>
+    <td>PC0</td>
+    <td><code>SCALE_0</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>У jog — кнопка Rapid (натиснуто = LOW до GND).</td>
+    <td><code>jog.c</code> <code>RAPID_BTN</code></td>
+  </tr>
+  <tr>
+    <td>Панель</td>
+    <td>PC1</td>
+    <td><code>SCA</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Додатковий вхід за схемою плати.</td>
+    <td>За використанням у проєкті</td>
+  </tr>
+  <tr><td colspan="7" class="port">Безпека та драйвер кроків</td></tr>
+  <tr>
+    <td>Безпека</td>
+    <td>PE0</td>
+    <td><code>E_STOP</code></td>
+    <td>Вхід</td>
+    <td>GPIO EXTI, pull-up</td>
+    <td>NC-ланцюг на GND: замкнений = LOW; розрив = HIGH = стоп. Пульт C/CN, панельний стоп — послідовно.</td>
+    <td><code>gpio_if.c</code>, <code>events.c</code>, <code>ESTOP_ACTIVE_HIGH</code> у <code>board.h</code></td>
+  </tr>
+  <tr>
+    <td>Драйвер</td>
+    <td>PE1</td>
+    <td><code>FAULT_IN</code></td>
+    <td>Вхід</td>
+    <td>GPIO EXTI rising, NOPULL за <code>main.c</code></td>
+    <td>Сигнал аварії від DM556/аналогу — за вашою схемою (оптопара, відкритий колектор).</td>
+    <td>Обробка fault у системі станів</td>
+  </tr>
+  <tr><td colspan="7" class="port">Пульт ZSY1474 / перемикачі подачі (разом з «ENC_*» на PE)</td></tr>
+  <tr>
+    <td>Пульт / режим</td>
+    <td>PE2</td>
+    <td><code>FEED_MODE</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Якщо <b>не</b> використовується перемикач осі пульта: AUTO/MANUAL з панелі. При <code>MANUAL_FEED_USE_PENDANT_AXIS_SWITCH</code> — не читається для вибору осі; дріт краще не залишати «в повітрі».</td>
+    <td><code>manual_feed_mode.c</code></td>
+  </tr>
+  <tr>
+    <td>Пульт вісь</td>
+    <td>PE3</td>
+    <td><code>ENC_AXIS_S1</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Ось X пульта (жовтий); COM пульта на GND, активна позиція = LOW.</td>
+    <td><code>manual_feed_mode.c</code>, <code>board.h</code></td>
+  </tr>
+  <tr>
+    <td>Пульт вісь</td>
+    <td>PE4</td>
+    <td><code>ENC_AXIS_S2</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Ось Z (коричневий).</td>
+    <td>Те саме</td>
+  </tr>
+  <tr>
+    <td>Пульт вісь</td>
+    <td>PA2</td>
+    <td><code>PENDAXIS_Y</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td><b>Опційно.</b> Лише якщо <code>MANUAL_FEED_USE_PENDANT_AXIS_SWITCH</code> і <code>MANUAL_FEED_PENDANT_AXIS_NEED_Y4&nbsp;1</code>. Дріт чорний/жовтий. Якщо <b>не підключаєте</b> — <code>NEED_Y4&nbsp;0</code>, дріт Y не проводьте.</td>
+    <td><code>board.h</code>, <code>manual_feed_mode.c</code></td>
+  </tr>
+  <tr>
+    <td>Пульт вісь</td>
+    <td>PA3</td>
+    <td><code>PENDAXIS_4</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td><b>Опційно</b> — ті самі умови; дріт чорний/коричневий. Без підключення: <code>NEED_Y4&nbsp;0</code>.</td>
+    <td>Те саме</td>
+  </tr>
+  <tr>
+    <td>Пульт крок</td>
+    <td>PE5</td>
+    <td><code>ENC_STEP_S1</code> / PENDSTEP X1</td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>Масштаб 0,001&nbsp;мм або X1 (сірий); COM на GND.</td>
+    <td><code>manual_feed_mode.c</code></td>
+  </tr>
+  <tr>
+    <td>Пульт крок</td>
+    <td>PE6</td>
+    <td><code>ENC_STEP_S2</code> / X10</td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>0,01&nbsp;мм / X10 (чорний/сірий).</td>
+    <td>Те саме</td>
+  </tr>
+  <tr>
+    <td>Пульт крок</td>
+    <td>PE7</td>
+    <td><code>PENDSTEP_X100</code></td>
+    <td>Вхід</td>
+    <td>GPIO input, pull-up</td>
+    <td>0,1&nbsp;мм / X100 (помаранчевий); GPIO ініціалізується лише при <code>MANUAL_FEED_USE_PENDANT_STEP_SWITCH</code>.</td>
+    <td><code>board.h</code>, <code>Src/main.c</code> блок PE</td>
+  </tr>
+</table>
+
+<h3>6.1 Стислий довідник (одна строка на групу)</h3>
+<table>
+  <tr><th>Група</th><th>Піни (підсумок)</th></tr>
+  <tr><td>Крокові X</td><td>PA8 STEP, PA9 DIR, PA10 EN</td></tr>
+  <tr><td>Крокові Z</td><td>PB6 STEP, PB7 DIR, PB8 EN</td></tr>
+  <tr><td>Лінійні енкодери</td><td>PA0/PA1 — X; PA6/PA7 — Z</td></tr>
+  <tr><td>Обнулення лінійних</td><td>PB4, PB5</td></tr>
+  <tr><td>MPG</td><td>PB12 A, PB13 B, PB14 BTN</td></tr>
+  <tr><td>ADC</td><td>PA4 подача, PA5 кут; PA2 — темп. (якщо пульт Y не підключений і NEED_Y4=0)</td></tr>
+  <tr><td>Шпиндель</td><td>PA3 PWM (якщо вісь 4 пульта не підключена і NEED_Y4=0), PE8 ON</td></tr>
+  <tr><td>I2C2 / LCD</td><td>PB10 SCL, PB11 SDA</td></tr>
+  <tr><td>Джойстик</td><td>PC2 — PC5</td></tr>
+  <tr><td>Меню</td><td>PD8, PD9, PD10</td></tr>
+  <tr><td>SL</td><td>PC7…PC10 кнопки; PD0…PD3 LED; PC11 MODE_AXIS</td></tr>
+  <tr><td>Кінцевики</td><td>PD4…PD7</td></tr>
+  <tr><td>Панель</td><td>PC0 SCALE_0 / Rapid; PC1 SCA</td></tr>
+  <tr><td>Безпека</td><td>PE0 E-stop, PE1 Fault</td></tr>
+  <tr><td>Пульт ZSY1474</td><td>PE2…PE7; PA2/PA3 лише якщо NEED_Y4=1; інакше дроти Y/4 не підключати; COM→GND; C/CN→PE0+GND</td></tr>
+</table>
+
+<h2>7. Таймери та периферія (коротко)</h2>
+<ul>
+  <li><b>TIM2 / TIM3</b> — режим енкодера для PA0/1 та PA6/7 (лінійні датчики), ініціалізація в <code>Src/main.c</code> (<code>linear_encoders_init</code>).</li>
+  <li><b>TIM1 CH1</b> — PA8 (крок X); у bringup STEP може бути переведений у GPIO.</li>
+  <li><b>TIM4 CH1</b> — PB6 (крок Z).</li>
+  <li><b>TIM6</b> — 1 ms тік для енкодера MPG / jog (див. <code>stm32f4xx_it.c</code>).</li>
+  <li><b>ADC1</b> — канали на PA2, PA4, PA5 (залежно від конфігурації Cube).</li>
+  <li><b>I2C2</b> — PB10/PB11.</li>
+  <li><b>EXTI0</b> — PE0 (E-stop).</li>
+</ul>
+
+<p class="small">Документ не замінює CubeMX <code>.ioc</code>: при зміні ніг оновіть <code>main.h</code> і цей файл. Деталі пульта — <a href="ZSY1474_MPG_PENDANT_WIRING_UA.html">ZSY1474_MPG_PENDANT_WIRING_UA.html</a>, SN74LVC245 — <a href="LINEAR_ENCODER_SN74LVC245_STM32_UA.html">LINEAR_ENCODER_SN74LVC245_STM32_UA.html</a>.</p>
+
+</body>
+</html>
