@@ -231,6 +231,32 @@ void EXTI0_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles EXTI line1 interrupt.
+  */
+void EXTI1_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(FAULT_IN_Pin);
+}
+
+/**
+  * @brief This function handles EXTI line4 interrupt.
+  */
+void EXTI4_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(LIM_X_NEG_Pin);
+}
+
+/**
+  * @brief This function handles EXTI line[9:5] interrupts.
+  */
+void EXTI9_5_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(LIM_X_POS_Pin);
+  HAL_GPIO_EXTI_IRQHandler(LIM_Z_NEG_Pin);
+  HAL_GPIO_EXTI_IRQHandler(LIM_Z_POS_Pin);
+}
+
+/**
   * @brief This function handles TIM1 update interrupt and TIM10 global interrupt.
   */
 void TIM1_UP_TIM10_IRQHandler(void)

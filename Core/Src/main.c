@@ -107,6 +107,18 @@ int main(void)
   app_init();
   (void)HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
   (void)HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+
+  /* TIM6: 1 ms tick for enc_if (+ jog in bringup). */
+  __HAL_RCC_TIM6_CLK_ENABLE();
+  TIM6->PSC = 83;   /* 84 MHz / (83+1) = 1 MHz */
+  TIM6->ARR = 999;  /* 1 MHz / (999+1) = 1 kHz */
+  TIM6->CR1 = 0;
+  TIM6->EGR = TIM_EGR_UG;
+  TIM6->SR = 0;
+  TIM6->DIER = TIM_DIER_UIE;
+  HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 2, 0);
+  HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
+  TIM6->CR1 = TIM_CR1_CEN;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -524,13 +536,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /* E_STOP PE0: пульт/панель NC + підтяжка; при розриві ланцюга — RISING. FAULT_IN PE1 — за схемою драйвера. */
-  GPIO_InitStruct.Pin = E_STOP_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-  GPIO_InitStruct.Pin = FAULT_IN_Pin;
+  /*Configure GPIO pins : E_STOP_Pin FAULT_IN_Pin */
+  GPIO_InitStruct.Pin = E_STOP_Pin|FAULT_IN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
@@ -538,6 +545,15 @@ static void MX_GPIO_Init(void)
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

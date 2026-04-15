@@ -245,6 +245,7 @@ PC9.GPIO_Label=SL_Z_NEG_BIT
 PC9.Locked=true
 PC9.Signal=GPIO_Input
 PCC.Checker=false
+PCC.Display=Plot\: All Steps
 PCC.Line=STM32F407/417
 PCC.MCU=STM32F407Z(E-G)Tx
 PCC.PartNumber=STM32F407ZETx
